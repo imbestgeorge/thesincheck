@@ -9,12 +9,32 @@ Set these locally and in Vercel:
 - `DATABASE_URL`: Neon Postgres connection string
 - `ADMIN_PASSWORD`: password for `/admin`
 - `ADMIN_SESSION_SECRET`: long random string used to sign admin sessions
+- `QUESTION_IMPORT_TOKEN`: bearer token for `/api/questions/import` bulk automation
 - `GEMINI_API_KEY`: Google Gemini API key used by the server-side chatbot
 - `GEMINI_MODEL`: Gemini model name, defaults to `gemini-2.0-flash`
 - `CHAT_DAILY_LIMIT`: daily chatbot messages per visitor, defaults to `10`
 - `CHAT_RATE_LIMIT_SECRET`: long random string used to hash visitor rate-limit keys
 
 The API creates the required empty tables automatically on the first request. No starter questions are seeded.
+
+## Question Import API
+
+Use `POST /api/questions/import` to add questions from n8n. Imported questions are saved as disabled, so they do not show on the public questions page or in chatbot context until they are enabled in `/admin`.
+
+Set `QUESTION_IMPORT_TOKEN` and send it as a bearer token:
+
+```json
+{
+  "questions": [
+    {
+      "question": "Is gossip a sin?",
+      "answer": "Yes. Gossip damages people with careless or harmful speech."
+    }
+  ]
+}
+```
+
+The response includes `success`, `createdCount`, `failedCount`, and per-item `results`. `videoUrl` is optional and defaults to the sample YouTube Short.
 
 ## Chatbot
 

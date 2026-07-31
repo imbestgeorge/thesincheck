@@ -6,6 +6,7 @@ import adminLoginHandler from './api/admin/login.js'
 import adminLogoutHandler from './api/admin/logout.js'
 import chatHandler from './api/chat.js'
 import questionHandler from './api/questions/[id].js'
+import questionImportHandler from './api/questions/import.js'
 import questionsHandler from './api/questions/index.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -25,6 +26,7 @@ function apiHandlerMiddleware(handler) {
 }
 
 app.all('/api/questions', apiHandlerMiddleware(questionsHandler))
+app.all('/api/questions/import', apiHandlerMiddleware(questionImportHandler))
 app.all('/api/questions/:id', apiHandlerMiddleware(questionHandler))
 app.all('/api/chat', apiHandlerMiddleware(chatHandler))
 app.all('/api/admin/login', apiHandlerMiddleware(adminLoginHandler))

@@ -13,6 +13,8 @@ const SAMPLE_SHORT_URL = 'https://youtube.com/shorts/16f3qfDccKc'
 const PAGE_SIZE = 12
 const ADMIN_TOKEN_KEY = 'thesincheck.adminToken'
 const CHAT_HISTORY_LIMIT = 8
+const NOTICE_VISIBLE_MS = 3200
+const NOTICE_FADE_MS = 350
 
 const socialLinks = [
   {
@@ -56,6 +58,7 @@ function normalizeCatalog(data) {
           question: String(item.question || ''),
           answer: String(item.answer || ''),
           videoUrl: String(item.videoUrl || SAMPLE_SHORT_URL),
+          isEnabled: item.isEnabled !== false,
         }))
         .sort((first, second) => first.id - second.id)
     : []
@@ -93,6 +96,52 @@ async function parseChatApiResponse(response) {
   }
 
   return data
+}
+
+function AutoDismissAlert({ text, variant, onDismiss }) {
+  const [isShowing, setIsShowing] = useState(false)
+  const onDismissRef = useRef(onDismiss)
+
+  useEffect(() => {
+    onDismissRef.current = onDismiss
+  }, [onDismiss])
+
+  useEffect(() => {
+    if (!text) {
+      return undefined
+    }
+
+    setIsShowing(true)
+
+    const fadeTimer = window.setTimeout(() => {
+      setIsShowing(false)
+    }, NOTICE_VISIBLE_MS)
+    const hideTimer = window.setTimeout(() => {
+      onDismissRef.current?.()
+    }, NOTICE_VISIBLE_MS + NOTICE_FADE_MS)
+
+    return () => {
+      window.clearTimeout(fadeTimer)
+      window.clearTimeout(hideTimer)
+    }
+  }, [text])
+
+  if (!text) {
+    return null
+  }
+
+  const isSuccess = variant === 'success'
+
+  return (
+    <div
+      className={`alert ${isSuccess ? 'alert-success border-success' : 'alert-dark border-dark'} fade ${
+        isShowing ? 'show' : ''
+      }`}
+      role="status"
+    >
+      {text}
+    </div>
+  )
 }
 
 function createChatMessage(role, text) {
@@ -628,6 +677,7 @@ function emptyQuestionDraft(nextId) {
     question: '',
     answer: '',
     videoUrl: SAMPLE_SHORT_URL,
+    isEnabled: true,
   }
 }
 
@@ -658,7 +708,9 @@ function AdminPage({ questions, nextId, setCatalog }) {
 
     return questions.filter((item) => {
       const searchableText =
-        `${item.id} ${item.question} ${item.answer} ${item.videoUrl}`.toLowerCase()
+        `${item.id} ${item.question} ${item.answer} ${item.videoUrl} ${
+          item.isEnabled ? 'enabled' : 'disabled'
+        }`.toLowerCase()
 
       return searchableText.includes(normalizedSearch)
     })
@@ -693,7 +745,7 @@ function AdminPage({ questions, nextId, setCatalog }) {
     setAdminToken(data.token)
   }
 
-  async function adminRequest(path, options = {}) {
+  const adminRequest = useCallback(async (path, options = {}) => {
     const response = await fetch(path, {
       ...options,
       headers: {
@@ -709,7 +761,37 @@ function AdminPage({ questions, nextId, setCatalog }) {
     }
 
     return parseApiResponse(response)
-  }
+  }, [adminToken])
+
+  useEffect(() => {
+    if (!adminToken) {
+      return
+    }
+
+    let isCurrentRequest = true
+
+    async function loadAdminCatalog() {
+      setError('')
+
+      try {
+        const data = await adminRequest('/api/questions?includeDisabled=true')
+
+        if (isCurrentRequest) {
+          setCatalog(data)
+        }
+      } catch (error) {
+        if (isCurrentRequest) {
+          setError(error.message)
+        }
+      }
+    }
+
+    loadAdminCatalog()
+
+    return () => {
+      isCurrentRequest = false
+    }
+  }, [adminRequest, adminToken, setCatalog])
 
   function handleDraftChange(field, value) {
     setDraft((currentDraft) => ({
@@ -728,6 +810,7 @@ function AdminPage({ questions, nextId, setCatalog }) {
       question: draft.question,
       answer: draft.answer,
       videoUrl: draft.videoUrl,
+      isEnabled: draft.isEnabled !== false,
     }
 
     try {
@@ -796,6 +879,38 @@ function AdminPage({ questions, nextId, setCatalog }) {
     }
   }
 
+  async function handleToggleEnabled(item) {
+    const nextEnabledValue = !item.isEnabled
+
+    setIsSaving(true)
+    setError('')
+    setMessage('')
+
+    try {
+      const data = await adminRequest(`/api/questions/${item.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ isEnabled: nextEnabledValue }),
+      })
+
+      setCatalog(data)
+
+      if (editingId === item.id) {
+        setDraft((currentDraft) => ({
+          ...currentDraft,
+          isEnabled: data.updated.isEnabled,
+        }))
+      }
+
+      setMessage(
+        `Question ${item.id} was ${nextEnabledValue ? 'enabled' : 'disabled'}.`,
+      )
+    } catch (error) {
+      setError(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   function handleCancel() {
     setEditingId(null)
     setDraft(emptyQuestionDraft(nextId))
@@ -837,8 +952,12 @@ function AdminPage({ questions, nextId, setCatalog }) {
             </button>
           </div>
 
-          {message && <div className="alert alert-success border-success">{message}</div>}
-          {error && <div className="alert alert-dark border-dark">{error}</div>}
+          <AutoDismissAlert
+            text={message}
+            variant="success"
+            onDismiss={() => setMessage('')}
+          />
+          <AutoDismissAlert text={error} variant="dark" onDismiss={() => setError('')} />
 
           <div className="border border-success rounded p-3 p-md-4 mb-4 bg-white">
             <h2 className="h4 mb-3">{editingId === null ? 'Create Question' : 'Edit Question'}</h2>
@@ -962,6 +1081,25 @@ function AdminPage({ questions, nextId, setCatalog }) {
                     </td>
                     <td className="text-center align-middle">
                       <div className="d-flex justify-content-center gap-2">
+                        <button
+                          type="button"
+                          className={`btn btn-sm d-inline-flex align-items-center justify-content-center ${
+                            item.isEnabled ? 'btn-outline-dark' : 'btn-success'
+                          }`}
+                          onClick={() => handleToggleEnabled(item)}
+                          disabled={isSaving}
+                          aria-label={`${item.isEnabled ? 'Disable' : 'Enable'} question ${
+                            item.id
+                          }`}
+                          title={`${item.isEnabled ? 'Disable' : 'Enable'} question ${item.id}`}
+                        >
+                          <i
+                            className={`bi ${
+                              item.isEnabled ? 'bi-x-lg' : 'bi-check-lg'
+                            } fs-5 lh-1`}
+                            aria-hidden="true"
+                          ></i>
+                        </button>
                         <button
                           type="button"
                           className="btn btn-success btn-sm d-inline-flex align-items-center justify-content-center"

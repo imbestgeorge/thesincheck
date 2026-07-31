@@ -11,6 +11,10 @@ function getSessionSecret() {
   return process.env.ADMIN_SESSION_SECRET || getAdminPassword()
 }
 
+function getImportToken() {
+  return process.env.QUESTION_IMPORT_TOKEN || process.env.N8N_IMPORT_TOKEN || ''
+}
+
 function base64UrlEncode(value) {
   return Buffer.from(value).toString('base64url')
 }
@@ -28,6 +32,31 @@ function signaturesMatch(firstSignature, secondSignature) {
   }
 
   return timingSafeEqual(firstBuffer, secondBuffer)
+}
+
+function secretsMatch(firstValue, secondValue) {
+  const firstBuffer = Buffer.from(String(firstValue || ''))
+  const secondBuffer = Buffer.from(String(secondValue || ''))
+
+  if (firstBuffer.length !== secondBuffer.length) {
+    return false
+  }
+
+  return timingSafeEqual(firstBuffer, secondBuffer)
+}
+
+function firstHeader(value) {
+  if (Array.isArray(value)) {
+    return value[0] || ''
+  }
+
+  return value || ''
+}
+
+function bearerToken(request) {
+  const authorization = firstHeader(request.headers.authorization)
+
+  return authorization.startsWith('Bearer ') ? authorization.slice(7) : ''
 }
 
 export function createAdminToken() {
@@ -48,8 +77,7 @@ export function assertPassword(password) {
 }
 
 export function requireAdmin(request) {
-  const authorization = request.headers.authorization || ''
-  const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : ''
+  const token = bearerToken(request)
   const [payload, signature] = token.split('.')
 
   if (!payload || !signature || !signaturesMatch(signature, sign(payload))) {
@@ -68,5 +96,23 @@ export function requireAdmin(request) {
     }
 
     throw createHttpError(401, 'Please sign in again.')
+  }
+}
+
+export function requireQuestionImportAccess(request) {
+  const importToken = getImportToken()
+
+  if (!importToken) {
+    requireAdmin(request)
+    return
+  }
+
+  const requestToken =
+    bearerToken(request) ||
+    firstHeader(request.headers['x-import-token']) ||
+    firstHeader(request.headers['x-api-key'])
+
+  if (!secretsMatch(requestToken, importToken)) {
+    throw createHttpError(401, 'Question import token is invalid.')
   }
 }

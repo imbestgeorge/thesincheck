@@ -20,16 +20,33 @@ export function questionPayload(body) {
   const question = String(body?.question || '').trim()
   const answer = String(body?.answer || '').trim()
   const videoUrl = String(body?.videoUrl || SAMPLE_SHORT_URL).trim()
+  const enabledValue = body?.isEnabled ?? body?.enabled
 
   if (!question || !answer || !videoUrl) {
     throw createHttpError(400, 'Question, answer, and YouTube Short are required.')
   }
 
-  return {
+  const payload = {
     question,
     answer,
     videoUrl,
   }
+
+  if (typeof enabledValue === 'boolean') {
+    payload.isEnabled = enabledValue
+  }
+
+  return payload
+}
+
+export function enabledPayload(body) {
+  const enabledValue = body?.isEnabled ?? body?.enabled
+
+  if (typeof enabledValue !== 'boolean') {
+    throw createHttpError(400, 'Enabled value must be true or false.')
+  }
+
+  return enabledValue
 }
 
 export async function handleApiError(response, error) {

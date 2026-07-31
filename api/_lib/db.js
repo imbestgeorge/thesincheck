@@ -1,5 +1,5 @@
 import { neon } from '@neondatabase/serverless'
-import { createHttpError } from './http.js'
+import { SAMPLE_SHORT_URL, createHttpError } from './http.js'
 
 let sql
 let schemaPromise
@@ -81,9 +81,14 @@ async function setupSchema() {
       question TEXT NOT NULL,
       answer TEXT NOT NULL,
       video_url TEXT NOT NULL,
+      is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
+  `
+  await database`
+    ALTER TABLE sincheck_questions
+    ADD COLUMN IF NOT EXISTS is_enabled BOOLEAN NOT NULL DEFAULT TRUE
   `
   await database`
     CREATE TABLE IF NOT EXISTS sincheck_chat_daily_usage (
@@ -107,6 +112,7 @@ function normalizeQuestion(row) {
     question: row.question,
     answer: row.answer,
     videoUrl: row.videoUrl,
+    isEnabled: row.isEnabled !== false,
   }
 }
 
@@ -151,15 +157,22 @@ async function getNextId(database) {
   return Number(rows[0]?.nextId || 1)
 }
 
-export async function getCatalog() {
+export async function getCatalog({ includeDisabled = false } = {}) {
   await ensureSchema()
 
   const database = getSql()
-  const questions = await database`
-    SELECT id, question, answer, video_url AS "videoUrl"
-    FROM sincheck_questions
-    ORDER BY id ASC
-  `
+  const questions = includeDisabled
+    ? await database`
+        SELECT id, question, answer, video_url AS "videoUrl", is_enabled AS "isEnabled"
+        FROM sincheck_questions
+        ORDER BY id ASC
+      `
+    : await database`
+        SELECT id, question, answer, video_url AS "videoUrl", is_enabled AS "isEnabled"
+        FROM sincheck_questions
+        WHERE is_enabled = TRUE
+        ORDER BY id ASC
+      `
   const nextId = await getNextId(database)
 
   return {
@@ -174,9 +187,10 @@ export async function getRelevantQuestions(message, limit = 8) {
   const database = getSql()
   const searchLimit = Math.max(1, Math.min(Number(limit) || 8, 12))
   const rows = await database`
-    SELECT id, question, answer, video_url AS "videoUrl"
+    SELECT id, question, answer, video_url AS "videoUrl", is_enabled AS "isEnabled"
     FROM sincheck_questions
-    WHERE to_tsvector('english', question || ' ' || answer) @@ websearch_to_tsquery('english', ${message})
+    WHERE is_enabled = TRUE
+      AND to_tsvector('english', question || ' ' || answer) @@ websearch_to_tsquery('english', ${message})
     ORDER BY
       ts_rank_cd(
         to_tsvector('english', question || ' ' || answer),
@@ -191,8 +205,9 @@ export async function getRelevantQuestions(message, limit = 8) {
   }
 
   const fallbackRows = await database`
-    SELECT id, question, answer, video_url AS "videoUrl"
+    SELECT id, question, answer, video_url AS "videoUrl", is_enabled AS "isEnabled"
     FROM sincheck_questions
+    WHERE is_enabled = TRUE
     ORDER BY id ASC
     LIMIT 200
   `
@@ -270,10 +285,11 @@ export async function refundChatMessage(rateKey, usageDate) {
   `
 }
 
-export async function createQuestion(payload) {
+export async function createQuestion(payload, { includeDisabled = false } = {}) {
   await ensureSchema()
 
   const database = getSql()
+  const isEnabled = payload.isEnabled !== false
   const createdRows = await database`
     WITH next_value AS (
       UPDATE sincheck_state
@@ -282,15 +298,15 @@ export async function createQuestion(payload) {
       RETURNING value - 1 AS id
     ),
     inserted AS (
-      INSERT INTO sincheck_questions (id, question, answer, video_url)
-      SELECT id, ${payload.question}, ${payload.answer}, ${payload.videoUrl}
+      INSERT INTO sincheck_questions (id, question, answer, video_url, is_enabled)
+      SELECT id, ${payload.question}, ${payload.answer}, ${payload.videoUrl}, ${isEnabled}
       FROM next_value
-      RETURNING id, question, answer, video_url AS "videoUrl"
+      RETURNING id, question, answer, video_url AS "videoUrl", is_enabled AS "isEnabled"
     )
-    SELECT id, question, answer, "videoUrl"
+    SELECT id, question, answer, "videoUrl", "isEnabled"
     FROM inserted
   `
-  const catalog = await getCatalog()
+  const catalog = await getCatalog({ includeDisabled })
 
   return {
     ...catalog,
@@ -298,26 +314,28 @@ export async function createQuestion(payload) {
   }
 }
 
-export async function updateQuestion(id, payload) {
+export async function updateQuestion(id, payload, { includeDisabled = false } = {}) {
   await ensureSchema()
 
   const database = getSql()
+  const isEnabled = typeof payload.isEnabled === 'boolean' ? payload.isEnabled : null
   const updatedRows = await database`
     UPDATE sincheck_questions
     SET
       question = ${payload.question},
       answer = ${payload.answer},
       video_url = ${payload.videoUrl},
+      is_enabled = COALESCE(${isEnabled}, is_enabled),
       updated_at = NOW()
     WHERE id = ${id}
-    RETURNING id, question, answer, video_url AS "videoUrl"
+    RETURNING id, question, answer, video_url AS "videoUrl", is_enabled AS "isEnabled"
   `
 
   if (updatedRows.length === 0) {
     throw createHttpError(404, `Question ${id} was not found.`)
   }
 
-  const catalog = await getCatalog()
+  const catalog = await getCatalog({ includeDisabled })
 
   return {
     ...catalog,
@@ -325,7 +343,7 @@ export async function updateQuestion(id, payload) {
   }
 }
 
-export async function deleteQuestion(id) {
+export async function deleteQuestion(id, { includeDisabled = false } = {}) {
   await ensureSchema()
 
   const database = getSql()
@@ -339,10 +357,101 @@ export async function deleteQuestion(id) {
     throw createHttpError(404, `Question ${id} was not found.`)
   }
 
-  const catalog = await getCatalog()
+  const catalog = await getCatalog({ includeDisabled })
 
   return {
     ...catalog,
     deletedId: id,
   }
+}
+
+export async function setQuestionEnabled(id, isEnabled) {
+  await ensureSchema()
+
+  const database = getSql()
+  const updatedRows = await database`
+    UPDATE sincheck_questions
+    SET
+      is_enabled = ${isEnabled},
+      updated_at = NOW()
+    WHERE id = ${id}
+    RETURNING id, question, answer, video_url AS "videoUrl", is_enabled AS "isEnabled"
+  `
+
+  if (updatedRows.length === 0) {
+    throw createHttpError(404, `Question ${id} was not found.`)
+  }
+
+  const catalog = await getCatalog({ includeDisabled: true })
+
+  return {
+    ...catalog,
+    updated: normalizeQuestion(updatedRows[0]),
+  }
+}
+
+export async function createDisabledQuestions(payloads) {
+  await ensureSchema()
+
+  if (payloads.length === 0) {
+    return []
+  }
+
+  const database = getSql()
+  const importRows = payloads.map((item) => ({
+    input_index: item.inputIndex,
+    question: item.question,
+    answer: item.answer,
+    video_url: item.videoUrl || SAMPLE_SHORT_URL,
+  }))
+  const insertedRows = await database`
+    WITH payloads AS (
+      SELECT
+        (ROW_NUMBER() OVER (ORDER BY input_index) - 1)::INTEGER AS id_offset,
+        input_index,
+        question,
+        answer,
+        COALESCE(NULLIF(video_url, ''), ${SAMPLE_SHORT_URL}) AS video_url
+      FROM jsonb_to_recordset(${JSON.stringify(importRows)}::jsonb)
+        AS item(input_index INTEGER, question TEXT, answer TEXT, video_url TEXT)
+    ),
+    next_value AS (
+      UPDATE sincheck_state
+      SET value = value + (SELECT COUNT(*)::INTEGER FROM payloads)
+      WHERE key = 'next_question_id'
+      RETURNING value - (SELECT COUNT(*)::INTEGER FROM payloads) AS first_id
+    ),
+    assigned AS (
+      SELECT
+        next_value.first_id + payloads.id_offset AS id,
+        payloads.input_index,
+        payloads.question,
+        payloads.answer,
+        payloads.video_url
+      FROM payloads
+      CROSS JOIN next_value
+    ),
+    inserted AS (
+      INSERT INTO sincheck_questions (id, question, answer, video_url, is_enabled)
+      SELECT id, question, answer, video_url, FALSE
+      FROM assigned
+      ORDER BY input_index
+      RETURNING id, question, answer, video_url AS "videoUrl", is_enabled AS "isEnabled"
+    )
+    SELECT
+      assigned.input_index AS "inputIndex",
+      inserted.id,
+      inserted.question,
+      inserted.answer,
+      inserted."videoUrl",
+      inserted."isEnabled"
+    FROM inserted
+    INNER JOIN assigned ON assigned.id = inserted.id
+    ORDER BY assigned.input_index ASC
+  `
+
+  return insertedRows.map((row) => ({
+    inputIndex: Number(row.inputIndex),
+    ...normalizeQuestion(row),
+  }))
 }
