@@ -12,6 +12,17 @@ dist
 dist-ssr
 *.local
 
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Local Vercel state
+.vercel
+
+# Local data files
+data
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

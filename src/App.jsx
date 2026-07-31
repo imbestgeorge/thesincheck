@@ -8,8 +8,8 @@ import {
   siYoutube,
 } from 'simple-icons'
 import logo from './assets/logo.png'
-import { SAMPLE_SHORT_URL } from './questions.js'
 
+const SAMPLE_SHORT_URL = 'https://youtube.com/shorts/16f3qfDccKc'
 const PAGE_SIZE = 12
 const ADMIN_TOKEN_KEY = 'thesincheck.adminToken'
 
