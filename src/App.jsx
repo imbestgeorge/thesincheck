@@ -12,6 +12,7 @@ import logo from './assets/logo.png'
 const SAMPLE_SHORT_URL = 'https://youtube.com/shorts/16f3qfDccKc'
 const PAGE_SIZE = 12
 const ADMIN_TOKEN_KEY = 'thesincheck.adminToken'
+const CHAT_HISTORY_LIMIT = 8
 
 const socialLinks = [
   {
@@ -80,6 +81,28 @@ async function parseApiResponse(response) {
   return data
 }
 
+async function parseChatApiResponse(response) {
+  const data = await response.json().catch(() => ({}))
+
+  if (!response.ok) {
+    const error = new Error(data.message || 'The chatbot could not answer right now.')
+
+    error.remaining = data.remaining
+    error.limit = data.limit
+    throw error
+  }
+
+  return data
+}
+
+function createChatMessage(role, text) {
+  return {
+    id: `${role}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    role,
+    text,
+  }
+}
+
 function getYouTubeEmbedUrl(url) {
   try {
     const parsedUrl = new URL(url)
@@ -129,6 +152,177 @@ function KofiButton() {
   }, [])
 
   return <div ref={widgetRef} aria-label="Support me on Ko-fi"></div>
+}
+
+function ChatbotWidget() {
+  const [isOpen, setIsOpen] = useState(false)
+  const [messages, setMessages] = useState([
+    {
+      id: 'chat-welcome',
+      role: 'assistant',
+      text: "Hey, I'm the virtual assistant for TheSinCheck. You can ask me questions about whether something is sinful. I'll use TheSinCheck Q&A first, then answer from a biblical Christian point of view.",
+    },
+  ])
+  const [draft, setDraft] = useState('')
+  const [error, setError] = useState('')
+  const [remaining, setRemaining] = useState(null)
+  const [limit, setLimit] = useState(null)
+  const [isSending, setIsSending] = useState(false)
+  const messagesEndRef = useRef(null)
+
+  useEffect(() => {
+    if (isOpen) {
+      messagesEndRef.current?.scrollIntoView({ block: 'end' })
+    }
+  }, [isOpen, messages, isSending])
+
+  async function handleSubmit(event) {
+    event.preventDefault()
+
+    const messageText = draft.trim()
+
+    if (!messageText || isSending || remaining === 0) {
+      return
+    }
+
+    const userMessage = createChatMessage('user', messageText)
+    const history = messages
+      .filter((message) => message.id !== 'chat-welcome')
+      .slice(-CHAT_HISTORY_LIMIT)
+      .map((message) => ({
+        role: message.role,
+        text: message.text,
+      }))
+
+    setMessages((currentMessages) => [...currentMessages, userMessage])
+    setDraft('')
+    setError('')
+    setIsSending(true)
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: messageText,
+          history,
+        }),
+      })
+      const data = await parseChatApiResponse(response)
+
+      setMessages((currentMessages) => [
+        ...currentMessages,
+        createChatMessage('assistant', data.reply),
+      ])
+      setRemaining(data.remaining)
+      setLimit(data.limit)
+    } catch (error) {
+      setError(error.message)
+
+      if (Number.isInteger(error.remaining)) {
+        setRemaining(error.remaining)
+      }
+
+      if (Number.isInteger(error.limit)) {
+        setLimit(error.limit)
+      }
+    } finally {
+      setIsSending(false)
+    }
+  }
+
+  function handleDraftKeyDown(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault()
+      event.currentTarget.form?.requestSubmit()
+    }
+  }
+
+  const isLimitReached = remaining === 0
+
+  return (
+    <div className="chatbot-widget">
+      {isOpen && (
+        <section className="chatbot-panel bg-white border border-success shadow" aria-label="Chatbot">
+          <div className="chatbot-header px-3 py-3">
+            <img src={logo} className="chatbot-logo" alt="The Sin Check" />
+            <h2 className="h6 m-0">TSC Virtual Assistant</h2>
+            <button
+              type="button"
+              className="btn btn-success d-inline-flex align-items-center justify-content-center chatbot-close"
+              aria-label="Close chatbot"
+              title="Close chatbot"
+              onClick={() => setIsOpen(false)}
+            >
+              <i className="bi bi-x-lg" aria-hidden="true"></i>
+            </button>
+          </div>
+
+          <div className="chatbot-messages">
+            {messages.map((message) => (
+              <div className={`chatbot-message chatbot-message-${message.role}`} key={message.id}>
+                <p>{message.text}</p>
+              </div>
+            ))}
+            {isSending && (
+              <div className="chatbot-message chatbot-message-assistant d-inline-flex align-items-center gap-2">
+                <span className="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                <span>Thinking...</span>
+              </div>
+            )}
+            <div ref={messagesEndRef}></div>
+          </div>
+
+          {error && <div className="chatbot-error alert alert-dark border-dark">{error}</div>}
+
+          <form className="chatbot-form" onSubmit={handleSubmit}>
+            <label htmlFor="chatbot-message" className="visually-hidden">
+              Chat message
+            </label>
+            <textarea
+              id="chatbot-message"
+              className="form-control border-success shadow-none chatbot-input"
+              rows="1"
+              maxLength="800"
+              placeholder={isLimitReached ? 'Daily limit reached' : 'Ask a question...'}
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={handleDraftKeyDown}
+              disabled={isSending || isLimitReached}
+            ></textarea>
+            <button
+              type="submit"
+              className="btn btn-success d-inline-flex align-items-center justify-content-center chatbot-send"
+              disabled={!draft.trim() || isSending || isLimitReached}
+              aria-label="Send message"
+              title="Send message"
+            >
+              <i className="bi bi-send-fill" aria-hidden="true"></i>
+            </button>
+          </form>
+
+          {Number.isInteger(remaining) && Number.isInteger(limit) && (
+            <div className="chatbot-meta">
+              {remaining} of {limit} messages left today
+            </div>
+          )}
+        </section>
+      )}
+
+      <button
+        type="button"
+        className="btn btn-success chatbot-toggle d-inline-flex align-items-center justify-content-center"
+        aria-label={isOpen ? 'Close chatbot' : 'Open chatbot'}
+        aria-expanded={isOpen}
+        title={isOpen ? 'Close chatbot' : 'Open chatbot'}
+        onClick={() => setIsOpen((currentValue) => !currentValue)}
+      >
+        <i className={`bi ${isOpen ? 'bi-x-lg' : 'bi-chat-dots-fill'}`} aria-hidden="true"></i>
+      </button>
+    </div>
+  )
 }
 
 function SiteNavbar() {
@@ -929,7 +1123,10 @@ function App() {
           setCatalog={setCatalog}
         />
       ) : (
-        <HomePage questions={catalog.questions} />
+        <>
+          <HomePage questions={catalog.questions} />
+          <ChatbotWidget />
+        </>
       )}
     </div>
   )

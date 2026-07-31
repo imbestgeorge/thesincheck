@@ -4,6 +4,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import adminLoginHandler from './api/admin/login.js'
 import adminLogoutHandler from './api/admin/logout.js'
+import chatHandler from './api/chat.js'
 import questionHandler from './api/questions/[id].js'
 import questionsHandler from './api/questions/index.js'
 
@@ -25,6 +26,7 @@ function apiHandlerMiddleware(handler) {
 
 app.all('/api/questions', apiHandlerMiddleware(questionsHandler))
 app.all('/api/questions/:id', apiHandlerMiddleware(questionHandler))
+app.all('/api/chat', apiHandlerMiddleware(chatHandler))
 app.all('/api/admin/login', apiHandlerMiddleware(adminLoginHandler))
 app.all('/api/admin/logout', apiHandlerMiddleware(adminLogoutHandler))
 
