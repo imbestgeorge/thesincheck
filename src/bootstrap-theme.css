@@ -1,0 +1,8 @@
+.pagination {
+  --bs-pagination-color: var(--bs-success);
+  --bs-pagination-hover-color: var(--bs-success);
+  --bs-pagination-focus-color: var(--bs-success);
+  --bs-pagination-focus-box-shadow: 0 0 0 0.25rem rgba(25, 135, 84, 0.25);
+  --bs-pagination-active-bg: var(--bs-success);
+  --bs-pagination-active-border-color: var(--bs-success);
+}
