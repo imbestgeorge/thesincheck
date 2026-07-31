@@ -1,6 +1,6 @@
 import { requireQuestionImportAccess } from '../_lib/auth.js'
 import { createDisabledQuestions } from '../_lib/db.js'
-import { SAMPLE_SHORT_URL, createHttpError, sendJson } from '../_lib/http.js'
+import { createHttpError, sendJson } from '../_lib/http.js'
 
 const MAX_IMPORT_ITEMS = 500
 
@@ -23,7 +23,7 @@ function rawImportItems(body) {
 function cleanImportItem(item, index) {
   const question = String(item?.question || item?.q || '').trim()
   const answer = String(item?.answer || item?.a || '').trim()
-  const videoUrl = String(item?.videoUrl || item?.video_url || SAMPLE_SHORT_URL).trim()
+  const videoUrl = String(item?.videoUrl ?? item?.video_url ?? '').trim()
   const errors = []
 
   if (!question) {
@@ -32,10 +32,6 @@ function cleanImportItem(item, index) {
 
   if (!answer) {
     errors.push('Answer is required.')
-  }
-
-  if (!videoUrl) {
-    errors.push('YouTube Short is required.')
   }
 
   if (errors.length > 0) {

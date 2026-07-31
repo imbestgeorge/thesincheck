@@ -9,7 +9,6 @@ import {
 } from 'simple-icons'
 import logo from './assets/logo.png'
 
-const SAMPLE_SHORT_URL = 'https://youtube.com/shorts/16f3qfDccKc'
 const PAGE_SIZE = 12
 const ADMIN_TOKEN_KEY = 'thesincheck.adminToken'
 const CHAT_HISTORY_LIMIT = 8
@@ -57,7 +56,7 @@ function normalizeCatalog(data) {
           id: item.id,
           question: String(item.question || ''),
           answer: String(item.answer || ''),
-          videoUrl: String(item.videoUrl || SAMPLE_SHORT_URL),
+          videoUrl: String(item.videoUrl || ''),
           isEnabled: item.isEnabled !== false,
         }))
         .sort((first, second) => first.id - second.id)
@@ -160,7 +159,7 @@ function getYouTubeEmbedUrl(url) {
 
     return `https://www.youtube.com/embed/${videoId}`
   } catch {
-    return 'https://www.youtube.com/embed/16f3qfDccKc'
+    return ''
   }
 }
 
@@ -403,6 +402,7 @@ function SiteNavbar() {
 function QuestionPanel({ item, accordionId }) {
   const collapseId = `question-${item.id}`
   const headingId = `question-heading-${item.id}`
+  const embedUrl = item.videoUrl ? getYouTubeEmbedUrl(item.videoUrl) : ''
 
   return (
     <section className="border-bottom border-success">
@@ -429,14 +429,16 @@ function QuestionPanel({ item, accordionId }) {
       >
         <div className="pb-4">
           <p className="mb-3 text-black fs-5">{item.answer}</p>
-          <div className="ratio ratio-16x9 border border-success">
-            <iframe
-              src={getYouTubeEmbedUrl(item.videoUrl)}
-              title={`YouTube short for question ${item.id}`}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
-            ></iframe>
-          </div>
+          {embedUrl && (
+            <div className="ratio ratio-16x9 border border-success">
+              <iframe
+                src={embedUrl}
+                title={`YouTube short for question ${item.id}`}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+              ></iframe>
+            </div>
+          )}
         </div>
       </div>
     </section>
@@ -676,7 +678,7 @@ function emptyQuestionDraft(nextId) {
     id: nextId,
     question: '',
     answer: '',
-    videoUrl: SAMPLE_SHORT_URL,
+    videoUrl: '',
     isEnabled: true,
   }
 }
@@ -1001,7 +1003,7 @@ function AdminPage({ questions, nextId, setCatalog }) {
                 </div>
                 <div className="col-12">
                   <label htmlFor="question-video" className="form-label">
-                    YouTube Short
+                    YouTube Short (Optional)
                   </label>
                   <input
                     id="question-video"
@@ -1009,7 +1011,6 @@ function AdminPage({ questions, nextId, setCatalog }) {
                     className="form-control border-success"
                     value={draft.videoUrl}
                     onChange={(event) => handleDraftChange('videoUrl', event.target.value)}
-                    required
                   />
                 </div>
               </div>
@@ -1070,14 +1071,18 @@ function AdminPage({ questions, nextId, setCatalog }) {
                     <td className="text-center align-middle">{item.question}</td>
                     <td className="text-center align-middle">{item.answer}</td>
                     <td className="text-center align-middle">
-                      <a
-                        href={item.videoUrl}
-                        className="link-success"
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Open
-                      </a>
+                      {item.videoUrl ? (
+                        <a
+                          href={item.videoUrl}
+                          className="link-success"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Open
+                        </a>
+                      ) : (
+                        <span className="text-secondary">None</span>
+                      )}
                     </td>
                     <td className="text-center align-middle">
                       <div className="d-flex justify-content-center gap-2">

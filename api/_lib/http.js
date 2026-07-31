@@ -1,5 +1,3 @@
-export const SAMPLE_SHORT_URL = 'https://youtube.com/shorts/16f3qfDccKc'
-
 export function createHttpError(status, message) {
   const error = new Error(message)
   error.status = status
@@ -19,11 +17,11 @@ export function methodNotAllowed(response, allowedMethods) {
 export function questionPayload(body) {
   const question = String(body?.question || '').trim()
   const answer = String(body?.answer || '').trim()
-  const videoUrl = String(body?.videoUrl || SAMPLE_SHORT_URL).trim()
+  const videoUrl = String(body?.videoUrl ?? body?.video_url ?? '').trim()
   const enabledValue = body?.isEnabled ?? body?.enabled
 
-  if (!question || !answer || !videoUrl) {
-    throw createHttpError(400, 'Question, answer, and YouTube Short are required.')
+  if (!question || !answer) {
+    throw createHttpError(400, 'Question and answer are required.')
   }
 
   const payload = {

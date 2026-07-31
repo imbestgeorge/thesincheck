@@ -1,5 +1,5 @@
 import { neon } from '@neondatabase/serverless'
-import { SAMPLE_SHORT_URL, createHttpError } from './http.js'
+import { createHttpError } from './http.js'
 
 let sql
 let schemaPromise
@@ -80,11 +80,15 @@ async function setupSchema() {
       id INTEGER PRIMARY KEY,
       question TEXT NOT NULL,
       answer TEXT NOT NULL,
-      video_url TEXT NOT NULL,
+      video_url TEXT,
       is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
+  `
+  await database`
+    ALTER TABLE sincheck_questions
+    ALTER COLUMN video_url DROP NOT NULL
   `
   await database`
     ALTER TABLE sincheck_questions
@@ -111,7 +115,7 @@ function normalizeQuestion(row) {
     id: Number(row.id),
     question: row.question,
     answer: row.answer,
-    videoUrl: row.videoUrl,
+    videoUrl: row.videoUrl || '',
     isEnabled: row.isEnabled !== false,
   }
 }
@@ -290,6 +294,7 @@ export async function createQuestion(payload, { includeDisabled = false } = {}) 
 
   const database = getSql()
   const isEnabled = payload.isEnabled !== false
+  const videoUrl = payload.videoUrl || null
   const createdRows = await database`
     WITH next_value AS (
       UPDATE sincheck_state
@@ -299,7 +304,7 @@ export async function createQuestion(payload, { includeDisabled = false } = {}) 
     ),
     inserted AS (
       INSERT INTO sincheck_questions (id, question, answer, video_url, is_enabled)
-      SELECT id, ${payload.question}, ${payload.answer}, ${payload.videoUrl}, ${isEnabled}
+      SELECT id, ${payload.question}, ${payload.answer}, ${videoUrl}, ${isEnabled}
       FROM next_value
       RETURNING id, question, answer, video_url AS "videoUrl", is_enabled AS "isEnabled"
     )
@@ -319,12 +324,13 @@ export async function updateQuestion(id, payload, { includeDisabled = false } = 
 
   const database = getSql()
   const isEnabled = typeof payload.isEnabled === 'boolean' ? payload.isEnabled : null
+  const videoUrl = payload.videoUrl || null
   const updatedRows = await database`
     UPDATE sincheck_questions
     SET
       question = ${payload.question},
       answer = ${payload.answer},
-      video_url = ${payload.videoUrl},
+      video_url = ${videoUrl},
       is_enabled = COALESCE(${isEnabled}, is_enabled),
       updated_at = NOW()
     WHERE id = ${id}
@@ -402,7 +408,7 @@ export async function createDisabledQuestions(payloads) {
     input_index: item.inputIndex,
     question: item.question,
     answer: item.answer,
-    video_url: item.videoUrl || SAMPLE_SHORT_URL,
+    video_url: item.videoUrl || null,
   }))
   const insertedRows = await database`
     WITH payloads AS (
@@ -411,7 +417,7 @@ export async function createDisabledQuestions(payloads) {
         input_index,
         question,
         answer,
-        COALESCE(NULLIF(video_url, ''), ${SAMPLE_SHORT_URL}) AS video_url
+        NULLIF(video_url, '') AS video_url
       FROM jsonb_to_recordset(${JSON.stringify(importRows)}::jsonb)
         AS item(input_index INTEGER, question TEXT, answer TEXT, video_url TEXT)
     ),

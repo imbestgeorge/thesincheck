@@ -34,7 +34,7 @@ Set `QUESTION_IMPORT_TOKEN` and send it as a bearer token:
 }
 ```
 
-The response includes `success`, `createdCount`, `failedCount`, and per-item `results`. `videoUrl` is optional and defaults to the sample YouTube Short.
+The response includes `success`, `createdCount`, `failedCount`, and per-item `results`. `videoUrl` is optional.
 
 ## Chatbot
 
