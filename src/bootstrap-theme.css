@@ -7,6 +7,10 @@
   --bs-pagination-active-border-color: var(--bs-success);
 }
 
+.question-answer {
+  white-space: pre-wrap;
+}
+
 .chatbot-widget {
   position: fixed;
   left: clamp(1rem, 3vw, 1.5rem);

@@ -428,7 +428,7 @@ function QuestionPanel({ item, accordionId }) {
         data-bs-parent={`#${accordionId}`}
       >
         <div className="pb-4">
-          <p className="mb-3 text-black fs-5">{item.answer}</p>
+          <p className="question-answer mb-3 text-black fs-5">{item.answer}</p>
           {embedUrl && (
             <div className="ratio ratio-16x9 border border-success">
               <iframe
