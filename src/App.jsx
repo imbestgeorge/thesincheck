@@ -7,7 +7,6 @@ import {
   siX,
   siYoutube,
 } from 'simple-icons'
-import { questionPath } from '../shared/seo.js'
 import logo from './assets/logo.png'
 
 const PAGE_SIZE = 12
@@ -296,7 +295,7 @@ function ChatbotWidget() {
       {isOpen && (
         <section className="chatbot-panel bg-white border border-success shadow" aria-label="Chatbot">
           <div className="chatbot-header px-3 py-3">
-            <img src={logo} className="chatbot-logo" alt="The Sin Check" />
+            <img src={logo} className="chatbot-logo" alt="TheSinCheck" />
             <h2 className="h6 m-0">TSC Virtual Assistant</h2>
             <button
               type="button"
@@ -379,11 +378,7 @@ function SiteNavbar() {
     <nav className="navbar bg-success">
       <div className="container-fluid">
         <div className="row align-items-center g-1 g-md-3 w-100">
-          <div className="col-4 col-md-3 d-flex justify-content-start">
-            <a className="nav-link text-white fw-semibold" href="/questions">
-              Questions
-            </a>
-          </div>
+          <div className="col-4 col-md-3"></div>
           <div className="col-4 col-md-6 text-center">
             <a href="/" className="navbar-brand m-0">
               <img
@@ -391,7 +386,7 @@ function SiteNavbar() {
                 width="170"
                 height="80"
                 className="img-fluid"
-                alt="The Sin Check"
+                alt="TheSinCheck"
               />
             </a>
           </div>
@@ -434,11 +429,6 @@ function QuestionPanel({ item, accordionId }) {
       >
         <div className="pb-4">
           <p className="question-answer mb-3 text-black fs-5">{item.answer}</p>
-          <p className="mb-3">
-            <a className="link-success fw-semibold" href={questionPath(item)}>
-              Permanent answer page
-            </a>
-          </p>
           {embedUrl && (
             <div className="ratio ratio-16x9 border border-success">
               <iframe

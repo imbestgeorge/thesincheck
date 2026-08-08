@@ -219,29 +219,6 @@ export async function getSeoQuestions() {
   return questions.map(normalizeQuestion)
 }
 
-export async function getPublicQuestion(id) {
-  const database = getSql()
-  const questions = await database`
-    SELECT
-      id,
-      question,
-      answer,
-      video_url AS "videoUrl",
-      is_enabled AS "isEnabled",
-      created_at AS "createdAt",
-      updated_at AS "updatedAt"
-    FROM sincheck_questions
-    WHERE id = ${id} AND is_enabled = TRUE
-    LIMIT 1
-  `
-
-  if (questions.length === 0) {
-    throw createHttpError(404, `Question ${id} was not found.`)
-  }
-
-  return normalizeQuestion(questions[0])
-}
-
 export async function getRelevantQuestions(message, limit = 8) {
   await ensureSchema()
 

@@ -10,11 +10,7 @@ import questionImportHandler from './api/questions/import.js'
 import questionsHandler from './api/questions/index.js'
 import seoHandler from './api/seo.js'
 import {
-  answersJsonHandler,
-  llmsFullHandler,
-  llmsHandler,
   questionPageHandler,
-  questionsIndexPageHandler,
   robotsHandler,
   sitemapHandler,
 } from './api/_lib/seo.js'
@@ -43,13 +39,9 @@ app.all('/api/admin/login', apiHandlerMiddleware(adminLoginHandler))
 app.all('/api/admin/logout', apiHandlerMiddleware(adminLogoutHandler))
 app.all('/api/seo', apiHandlerMiddleware(seoHandler))
 
-app.all('/questions', apiHandlerMiddleware(questionsIndexPageHandler))
-app.all('/questions/:idSlug', apiHandlerMiddleware(questionPageHandler))
+app.all('/questions/:slug', apiHandlerMiddleware(questionPageHandler))
 app.all('/sitemap.xml', apiHandlerMiddleware(sitemapHandler))
 app.all('/robots.txt', apiHandlerMiddleware(robotsHandler))
-app.all('/llms.txt', apiHandlerMiddleware(llmsHandler))
-app.all('/llms-full.txt', apiHandlerMiddleware(llmsFullHandler))
-app.all('/answers.json', apiHandlerMiddleware(answersJsonHandler))
 
 if (isProduction) {
   const distPath = path.join(__dirname, 'dist')
@@ -78,5 +70,5 @@ if (isProduction) {
 app.listen(PORT, HOST, () => {
   const visibleHost = HOST === '0.0.0.0' ? '127.0.0.1' : HOST
 
-  console.log(`The Sin Check is running at http://${visibleHost}:${PORT}/`)
+  console.log(`TheSinCheck is running at http://${visibleHost}:${PORT}/`)
 })

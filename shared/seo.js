@@ -1,17 +1,7 @@
-export const SITE_NAME = 'The Sin Check'
-export const SITE_TITLE = 'The Sin Check | Christian Answers to Sin Questions'
+export const SITE_NAME = 'TheSinCheck'
 export const SITE_DESCRIPTION =
-  'The Sin Check gives short, clear Christian answers to is it a sin questions with faith-focused explanations and related videos.'
+  'TheSinCheck gives short, clear Christian answers to is it a sin questions with faith-focused explanations and related videos.'
 export const QUESTION_ROUTE_PREFIX = '/questions'
-
-export const SOCIAL_PROFILES = [
-  'https://www.youtube.com/@TheSinCheck',
-  'https://www.tiktok.com/@thesincheck',
-  'https://www.instagram.com/thesincheck',
-  'https://x.com/TheSinCheck',
-  'https://www.threads.com/@thesincheck',
-  'https://discord.gg/MFJsEPKGfb',
-]
 
 export function normalizeWhitespace(text) {
   return String(text || '').replace(/\s+/g, ' ').trim()
@@ -46,21 +36,10 @@ export function slugifyQuestion(question) {
   return slug || 'answer'
 }
 
-export function parseQuestionIdSlug(value) {
-  const match = String(value || '').match(/^(\d+)/)
-  const id = Number(match?.[1] || 0)
-
-  return Number.isInteger(id) && id > 0 ? id : null
-}
-
 export function questionPath(item) {
-  const id = Number(item?.id)
+  const slug = slugifyQuestion(item?.question)
 
-  if (!Number.isInteger(id) || id < 1) {
-    return QUESTION_ROUTE_PREFIX
-  }
-
-  return `${QUESTION_ROUTE_PREFIX}/${id}-${slugifyQuestion(item.question)}`
+  return `${QUESTION_ROUTE_PREFIX}/${slug}`
 }
 
 export function answerExcerpt(item, maxLength = 158) {

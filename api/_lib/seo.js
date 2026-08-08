@@ -1,20 +1,62 @@
-import { getPublicQuestion, getSeoQuestions } from './db.js'
+import { getSeoQuestions } from './db.js'
 import { createHttpError } from './http.js'
 import {
+  siDiscord,
+  siInstagram,
+  siThreads,
+  siTiktok,
+  siX,
+  siYoutube,
+} from 'simple-icons'
+import {
   QUESTION_ROUTE_PREFIX,
-  SITE_DESCRIPTION,
   SITE_NAME,
-  SOCIAL_PROFILES,
   answerExcerpt,
   normalizeWhitespace,
-  parseQuestionIdSlug,
   questionPageTitle,
   questionPath,
-  truncateText,
+  slugifyQuestion,
 } from '../../shared/seo.js'
 
 const CACHE_CONTROL = 'public, max-age=0, s-maxage=300, stale-while-revalidate=86400'
 const FALLBACK_SITE_ORIGIN = 'https://thesincheck.com'
+const KOFI_WIDGET_ID = 'W2X523UHOA'
+const CHAT_HISTORY_LIMIT = 8
+const CHAT_WELCOME_MESSAGE =
+  "Hey, I'm the virtual assistant for TheSinCheck. You can ask me questions about whether something is sinful. I'll use TheSinCheck Q&A first, then answer from a biblical Christian point of view."
+
+const socialLinks = [
+  {
+    name: 'YouTube',
+    href: 'https://www.youtube.com/@TheSinCheck',
+    icon: siYoutube,
+  },
+  {
+    name: 'TikTok',
+    href: 'https://www.tiktok.com/@thesincheck',
+    icon: siTiktok,
+  },
+  {
+    name: 'Instagram',
+    href: 'https://www.instagram.com/thesincheck',
+    icon: siInstagram,
+  },
+  {
+    name: 'X',
+    href: 'https://x.com/TheSinCheck',
+    icon: siX,
+  },
+  {
+    name: 'Threads',
+    href: 'https://www.threads.com/@thesincheck',
+    icon: siThreads,
+  },
+  {
+    name: 'Discord',
+    href: 'https://discord.gg/MFJsEPKGfb',
+    icon: siDiscord,
+  },
+]
 
 function firstHeader(value) {
   if (Array.isArray(value)) {
@@ -53,25 +95,6 @@ function sendBody(request, response, status, body, contentType) {
   }
 
   response.end(body)
-}
-
-function sendJsonBody(request, response, status, data) {
-  setStatus(response, status)
-  response.setHeader('Content-Type', 'application/json; charset=utf-8')
-  response.setHeader('Cache-Control', CACHE_CONTROL)
-
-  if (request.method === 'HEAD') {
-    response.end()
-    return
-  }
-
-  if (typeof response.json === 'function') {
-    response.json(data)
-    return
-  }
-
-  response.setHeader('Content-Type', 'application/json; charset=utf-8')
-  response.end(JSON.stringify(data))
 }
 
 function ensurePublicGet(request, response) {
@@ -120,24 +143,6 @@ function absoluteUrl(origin, path) {
   return `${origin}${path.startsWith('/') ? path : `/${path}`}`
 }
 
-function formatDisplayDate(value) {
-  if (!value) {
-    return ''
-  }
-
-  const date = new Date(value)
-
-  if (Number.isNaN(date.getTime())) {
-    return ''
-  }
-
-  return new Intl.DateTimeFormat('en', {
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  }).format(date)
-}
-
 function requestPath(request) {
   if (request.path) {
     return request.path
@@ -175,278 +180,13 @@ function renderTextBlocks(text) {
   return blocks.map((block) => `<p>${escapeHtml(block)}</p>`).join('\n')
 }
 
-function getYouTubeEmbedUrl(url) {
-  try {
-    const parsedUrl = new URL(url)
-    const shortId = parsedUrl.pathname.split('/').filter(Boolean).at(-1)
-    const videoId = parsedUrl.searchParams.get('v') || shortId
+function findQuestionBySlug(questions, slug) {
+  const normalizedSlug = slugifyQuestion(slug)
 
-    if (!videoId) {
-      return ''
-    }
-
-    return `https://www.youtube.com/embed/${encodeURIComponent(videoId)}`
-  } catch {
-    return ''
-  }
+  return questions.find((item) => slugifyQuestion(item.question) === normalizedSlug)
 }
 
-function htmlDocument({ title, description, canonicalUrl, structuredData, body }) {
-  const jsonLd = structuredData
-    ? `<script type="application/ld+json">${escapeJsonForHtml(structuredData)}</script>`
-    : ''
-
-  return `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${escapeHtml(title)}</title>
-    <meta name="description" content="${escapeHtml(description)}" />
-    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
-    <link rel="canonical" href="${escapeHtml(canonicalUrl)}" />
-    <link rel="sitemap" type="application/xml" href="/sitemap.xml" />
-    <link rel="alternate" type="text/plain" title="LLM reference" href="/llms.txt" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta property="og:type" content="article" />
-    <meta property="og:site_name" content="${escapeHtml(SITE_NAME)}" />
-    <meta property="og:title" content="${escapeHtml(title)}" />
-    <meta property="og:description" content="${escapeHtml(description)}" />
-    <meta property="og:url" content="${escapeHtml(canonicalUrl)}" />
-    <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content="${escapeHtml(title)}" />
-    <meta name="twitter:description" content="${escapeHtml(description)}" />
-    ${jsonLd}
-    <style>
-      :root {
-        color-scheme: light;
-        --accent: #198754;
-        --ink: #111111;
-        --muted: #5f6a63;
-        --line: #d8e6dc;
-        --paper: #ffffff;
-        --wash: #f5faf7;
-      }
-
-      * {
-        box-sizing: border-box;
-      }
-
-      body {
-        margin: 0;
-        background: var(--paper);
-        color: var(--ink);
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        line-height: 1.65;
-      }
-
-      a {
-        color: #0f6b41;
-        text-decoration-thickness: 0.08em;
-        text-underline-offset: 0.18em;
-      }
-
-      .site-header,
-      .site-footer {
-        border-color: var(--line);
-        border-style: solid;
-        border-width: 0 0 1px;
-      }
-
-      .site-footer {
-        border-width: 1px 0 0;
-      }
-
-      .wrap {
-        width: min(960px, calc(100% - 32px));
-        margin: 0 auto;
-      }
-
-      .site-header .wrap,
-      .site-footer .wrap {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 16px;
-        padding: 18px 0;
-      }
-
-      .brand {
-        color: var(--ink);
-        font-size: 1.05rem;
-        font-weight: 800;
-        text-decoration: none;
-      }
-
-      .nav-link {
-        font-size: 0.95rem;
-        font-weight: 650;
-      }
-
-      main.wrap {
-        padding: 34px 0 48px;
-      }
-
-      .breadcrumb {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin: 0 0 28px;
-        padding: 0;
-        color: var(--muted);
-        font-size: 0.92rem;
-        list-style: none;
-      }
-
-      .breadcrumb li:not(:last-child)::after {
-        content: "/";
-        margin-left: 8px;
-        color: #8ba394;
-      }
-
-      .eyebrow {
-        margin: 0 0 8px;
-        color: var(--accent);
-        font-size: 0.84rem;
-        font-weight: 800;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-      }
-
-      h1 {
-        max-width: 880px;
-        margin: 0;
-        font-size: clamp(2.1rem, 6vw, 4.6rem);
-        line-height: 1.02;
-        letter-spacing: 0;
-      }
-
-      h2 {
-        margin: 34px 0 10px;
-        font-size: clamp(1.35rem, 3vw, 2rem);
-        letter-spacing: 0;
-      }
-
-      .lede {
-        max-width: 760px;
-        margin: 18px 0 0;
-        color: var(--muted);
-        font-size: 1.1rem;
-      }
-
-      .answer {
-        max-width: 790px;
-        font-size: 1.15rem;
-      }
-
-      .answer p {
-        margin: 0 0 18px;
-      }
-
-      .meta {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin: 20px 0 0;
-        color: var(--muted);
-        font-size: 0.95rem;
-      }
-
-      .video {
-        max-width: 820px;
-        margin-top: 26px;
-      }
-
-      .video iframe {
-        width: 100%;
-        aspect-ratio: 16 / 9;
-        border: 1px solid var(--accent);
-      }
-
-      .question-list {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-        gap: 14px;
-        margin: 18px 0 0;
-        padding: 0;
-        list-style: none;
-      }
-
-      .question-list li {
-        border-top: 1px solid var(--line);
-        padding-top: 14px;
-      }
-
-      .question-list a {
-        color: var(--ink);
-        font-weight: 750;
-      }
-
-      .question-list p {
-        margin: 6px 0 0;
-        color: var(--muted);
-        font-size: 0.95rem;
-      }
-
-      .feed-links {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-        margin-top: 22px;
-      }
-
-      .feed-links a {
-        border: 1px solid var(--line);
-        padding: 8px 11px;
-        border-radius: 6px;
-        background: var(--wash);
-        font-weight: 700;
-        text-decoration: none;
-      }
-    </style>
-  </head>
-  <body>
-    <header class="site-header">
-      <div class="wrap">
-        <a class="brand" href="/">${escapeHtml(SITE_NAME)}</a>
-        <a class="nav-link" href="${QUESTION_ROUTE_PREFIX}">All questions</a>
-      </div>
-    </header>
-    ${body}
-    <footer class="site-footer">
-      <div class="wrap">
-        <span>${escapeHtml(SITE_NAME)}</span>
-        <a href="/sitemap.xml">Sitemap</a>
-      </div>
-    </footer>
-  </body>
-</html>`
-}
-
-function baseStructuredData(origin) {
-  return [
-    {
-      '@type': 'Organization',
-      '@id': `${origin}/#organization`,
-      name: SITE_NAME,
-      url: `${origin}/`,
-      logo: `${origin}/favicon.svg`,
-      sameAs: SOCIAL_PROFILES,
-    },
-    {
-      '@type': 'WebSite',
-      '@id': `${origin}/#website`,
-      name: SITE_NAME,
-      url: `${origin}/`,
-      description: SITE_DESCRIPTION,
-      publisher: {
-        '@id': `${origin}/#organization`,
-      },
-    },
-  ]
-}
-
-function questionStructuredData(question, questions, origin, canonicalUrl) {
+function questionStructuredData(question, origin, canonicalUrl) {
   const questionText = normalizeWhitespace(question.question)
   const answerText = String(question.answer || '').trim()
   const datePublished = question.createdAt || question.updatedAt || undefined
@@ -455,31 +195,6 @@ function questionStructuredData(question, questions, origin, canonicalUrl) {
   return {
     '@context': 'https://schema.org',
     '@graph': [
-      ...baseStructuredData(origin),
-      {
-        '@type': 'BreadcrumbList',
-        '@id': `${canonicalUrl}#breadcrumb`,
-        itemListElement: [
-          {
-            '@type': 'ListItem',
-            position: 1,
-            name: 'Home',
-            item: `${origin}/`,
-          },
-          {
-            '@type': 'ListItem',
-            position: 2,
-            name: 'Questions',
-            item: absoluteUrl(origin, QUESTION_ROUTE_PREFIX),
-          },
-          {
-            '@type': 'ListItem',
-            position: 3,
-            name: questionText,
-            item: canonicalUrl,
-          },
-        ],
-      },
       {
         '@type': 'WebPage',
         '@id': `${canonicalUrl}#webpage`,
@@ -487,10 +202,9 @@ function questionStructuredData(question, questions, origin, canonicalUrl) {
         name: questionPageTitle(question),
         description: answerExcerpt(question),
         isPartOf: {
-          '@id': `${origin}/#website`,
-        },
-        breadcrumb: {
-          '@id': `${canonicalUrl}#breadcrumb`,
+          '@type': 'WebSite',
+          name: SITE_NAME,
+          url: `${origin}/`,
         },
         mainEntity: {
           '@id': `${canonicalUrl}#question`,
@@ -510,197 +224,428 @@ function questionStructuredData(question, questions, origin, canonicalUrl) {
             '@id': `${canonicalUrl}#question`,
             name: questionText,
             text: questionText,
-            answerCount: 1,
             acceptedAnswer: {
               '@type': 'Answer',
               '@id': `${canonicalUrl}#answer`,
               text: answerText,
               url: `${canonicalUrl}#answer`,
-              author: {
-                '@id': `${origin}/#organization`,
-              },
             },
           },
         ],
       },
-      {
-        '@type': 'Article',
-        '@id': `${canonicalUrl}#article`,
-        headline: questionText,
-        description: answerExcerpt(question),
-        articleSection: 'Christian Q&A',
-        keywords: ['is it a sin', 'Christian answers', 'Bible questions', questionText],
-        author: {
-          '@id': `${origin}/#organization`,
-        },
-        publisher: {
-          '@id': `${origin}/#organization`,
-        },
-        mainEntityOfPage: {
-          '@id': `${canonicalUrl}#webpage`,
-        },
-        ...(datePublished ? { datePublished } : {}),
-        ...(dateModified ? { dateModified } : {}),
-      },
-      {
-        '@type': 'ItemList',
-        '@id': `${canonicalUrl}#related-questions`,
-        name: 'Related Christian questions',
-        itemListElement: questions.map((item, index) => ({
-          '@type': 'ListItem',
-          position: index + 1,
-          url: absoluteUrl(origin, questionPath(item)),
-          name: normalizeWhitespace(item.question),
-        })),
-      },
     ],
   }
 }
 
-function questionsIndexStructuredData(questions, origin, canonicalUrl) {
-  const latestDate = latestQuestionDate(questions)
-
-  return {
-    '@context': 'https://schema.org',
-    '@graph': [
-      ...baseStructuredData(origin),
-      {
-        '@type': 'BreadcrumbList',
-        '@id': `${canonicalUrl}#breadcrumb`,
-        itemListElement: [
-          {
-            '@type': 'ListItem',
-            position: 1,
-            name: 'Home',
-            item: `${origin}/`,
-          },
-          {
-            '@type': 'ListItem',
-            position: 2,
-            name: 'Questions',
-            item: canonicalUrl,
-          },
-        ],
-      },
-      {
-        '@type': 'CollectionPage',
-        '@id': `${canonicalUrl}#webpage`,
-        url: canonicalUrl,
-        name: `Christian Questions and Answers | ${SITE_NAME}`,
-        description: SITE_DESCRIPTION,
-        isPartOf: {
-          '@id': `${origin}/#website`,
-        },
-        breadcrumb: {
-          '@id': `${canonicalUrl}#breadcrumb`,
-        },
-        mainEntity: {
-          '@id': `${canonicalUrl}#questions`,
-        },
-        inLanguage: 'en-US',
-        ...(latestDate ? { dateModified: latestDate } : {}),
-      },
-      {
-        '@type': 'ItemList',
-        '@id': `${canonicalUrl}#questions`,
-        name: 'Christian questions answered by The Sin Check',
-        numberOfItems: questions.length,
-        itemListElement: questions.map((item, index) => ({
-          '@type': 'ListItem',
-          position: index + 1,
-          url: absoluteUrl(origin, questionPath(item)),
-          name: normalizeWhitespace(item.question),
-        })),
-      },
-    ],
-  }
-}
-
-function relatedQuestionsFor(question, questions) {
-  const questionIndex = questions.findIndex((item) => item.id === question.id)
-  const relatedQuestions =
-    questionIndex === -1
-      ? questions
-      : [
-          ...questions.slice(Math.max(0, questionIndex - 3), questionIndex),
-          ...questions.slice(questionIndex + 1, questionIndex + 4),
-        ]
-
-  return relatedQuestions.filter((item) => item.id !== question.id).slice(0, 6)
-}
-
-function renderRelatedQuestions(questions, origin) {
-  if (questions.length === 0) {
-    return ''
-  }
-
-  const links = questions
+function htmlDocument({ title, description, canonicalUrl, structuredData, body }) {
+  const socialItems = socialLinks
     .map(
-      (item) => `<li>
-        <a href="${escapeHtml(questionPath(item))}">${escapeHtml(item.question)}</a>
-        <p>${escapeHtml(truncateText(item.answer, 118))}</p>
-      </li>`,
+      (item) => `<li class="nav-item">
+              <a
+                class="nav-link p-1 d-inline-flex align-items-center justify-content-center"
+                href="${escapeHtml(item.href)}"
+                target="_blank"
+                rel="noreferrer"
+                aria-label="${escapeHtml(item.name)}"
+              >
+                <svg
+                  width="30"
+                  height="30"
+                  viewBox="0 0 24 24"
+                  role="img"
+                  aria-hidden="true"
+                >
+                  <path fill="#fff" d="${escapeHtml(item.icon.path)}"></path>
+                </svg>
+              </a>
+            </li>`,
     )
     .join('\n')
 
-  return `<section aria-labelledby="related-title">
-    <h2 id="related-title">Related Questions</h2>
-    <ul class="question-list">${links}</ul>
-    <div class="feed-links">
-      <a href="${QUESTION_ROUTE_PREFIX}">Browse all questions</a>
-      <a href="${absoluteUrl(origin, '/llms.txt')}">LLM reference</a>
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${escapeHtml(title)}</title>
+    <meta name="description" content="${escapeHtml(description)}" />
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large" />
+    <link rel="canonical" href="${escapeHtml(canonicalUrl)}" />
+    <link rel="sitemap" type="application/xml" href="/sitemap.xml" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/favicon.png" />
+    <link rel="stylesheet" href="/bootstrap.min.css" />
+    <link rel="stylesheet" href="/bootstrap-icons.css" />
+    <link rel="stylesheet" href="/bootstrap-theme.css" />
+    <meta property="og:type" content="article" />
+    <meta property="og:site_name" content="${escapeHtml(SITE_NAME)}" />
+    <meta property="og:title" content="${escapeHtml(title)}" />
+    <meta property="og:description" content="${escapeHtml(description)}" />
+    <meta property="og:url" content="${escapeHtml(canonicalUrl)}" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="${escapeHtml(title)}" />
+    <meta name="twitter:description" content="${escapeHtml(description)}" />
+    <script type="application/ld+json">${escapeJsonForHtml(structuredData)}</script>
+    <style>
+      .page-shell {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      main {
+        width: min(820px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 48px 0;
+        flex: 1;
+      }
+
+      .all-questions-link {
+        color: #000000;
+        display: inline-block;
+        margin-bottom: 1.5rem;
+        text-decoration: underline;
+        text-underline-offset: 0.18em;
+      }
+
+      h1 {
+        margin: 0 0 24px;
+        font-size: 1.5rem;
+        font-weight: 600;
+        line-height: 1.5;
+        letter-spacing: 0;
+      }
+
+      .answer {
+        font-size: 1.15rem;
+      }
+
+      .answer p {
+        margin: 0 0 18px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page-shell">
+      <nav class="navbar bg-success">
+        <div class="container-fluid">
+          <div class="row align-items-center g-1 g-md-3 w-100">
+            <div class="col-4 col-md-3"></div>
+            <div class="col-4 col-md-6 text-center">
+              <a href="/" class="navbar-brand m-0">
+                <img
+                  src="/logo.png"
+                  width="170"
+                  height="80"
+                  class="img-fluid"
+                  alt="${escapeHtml(SITE_NAME)}"
+                />
+              </a>
+            </div>
+            <div class="d-none d-md-flex col-md-3 justify-content-md-end">
+              <div aria-label="Support me on Ko-fi"></div>
+            </div>
+          </div>
+        </div>
+      </nav>
+      ${body}
+      <footer class="bg-success py-4 mt-auto">
+        <div class="container">
+          <div class="d-flex d-md-none justify-content-center mb-3">
+            <div aria-label="Support me on Ko-fi"></div>
+          </div>
+          <ul class="nav justify-content-center gap-3">
+            ${socialItems}
+          </ul>
+        </div>
+      </footer>
+      <div class="chatbot-widget" data-chatbot>
+        <section class="chatbot-panel bg-white border border-success shadow d-none" aria-label="Chatbot">
+          <div class="chatbot-header px-3 py-3">
+            <img src="/logo.png" class="chatbot-logo" alt="${escapeHtml(SITE_NAME)}" />
+            <h2 class="h6 m-0">TSC Virtual Assistant</h2>
+            <button
+              type="button"
+              class="btn btn-success d-inline-flex align-items-center justify-content-center chatbot-close"
+              aria-label="Close chatbot"
+              title="Close chatbot"
+              data-chatbot-close
+            >
+              <i class="bi bi-x-lg" aria-hidden="true"></i>
+            </button>
+          </div>
+
+          <div class="chatbot-messages" data-chatbot-messages>
+            <div class="chatbot-message chatbot-message-assistant">
+              <p>${escapeHtml(CHAT_WELCOME_MESSAGE)}</p>
+            </div>
+            <div data-chatbot-end></div>
+          </div>
+
+          <div class="chatbot-error alert alert-dark border-dark d-none" data-chatbot-error></div>
+
+          <form class="chatbot-form" data-chatbot-form>
+            <label for="chatbot-message" class="visually-hidden">Chat message</label>
+            <textarea
+              id="chatbot-message"
+              class="form-control border-success shadow-none chatbot-input"
+              rows="1"
+              maxlength="800"
+              placeholder="Ask a question..."
+              data-chatbot-input
+            ></textarea>
+            <button
+              type="submit"
+              class="btn btn-success d-inline-flex align-items-center justify-content-center chatbot-send"
+              disabled
+              aria-label="Send message"
+              title="Send message"
+              data-chatbot-send
+            >
+              <i class="bi bi-send-fill" aria-hidden="true"></i>
+            </button>
+          </form>
+
+          <div class="chatbot-meta d-none" data-chatbot-meta></div>
+        </section>
+
+        <button
+          type="button"
+          class="btn btn-success chatbot-toggle d-inline-flex align-items-center justify-content-center"
+          aria-label="Open chatbot"
+          aria-expanded="false"
+          title="Open chatbot"
+          data-chatbot-toggle
+        >
+          <i class="bi bi-chat-dots-fill" aria-hidden="true"></i>
+        </button>
+      </div>
     </div>
-  </section>`
+    <script>
+      (function () {
+        function renderKofiWidgets() {
+          if (!window.kofiwidget2) return;
+          var widgets = document.querySelectorAll('[aria-label="Support me on Ko-fi"]');
+          widgets.forEach(function (widget) {
+            if (widget.dataset.rendered === 'true') return;
+            window.kofiwidget2.init('Support me on Ko-fi', '#72a4f2', '${KOFI_WIDGET_ID}');
+            widget.innerHTML = window.kofiwidget2.getHTML();
+            widget.dataset.rendered = 'true';
+          });
+        }
+
+        if (window.kofiwidget2) {
+          renderKofiWidgets();
+          return;
+        }
+
+        var script = document.createElement('script');
+        script.src = 'https://storage.ko-fi.com/cdn/widget/Widget_2.js';
+        script.async = true;
+        script.addEventListener('load', renderKofiWidgets);
+        document.body.appendChild(script);
+      })();
+
+      (function () {
+        var chatbot = document.querySelector('[data-chatbot]');
+        if (!chatbot) return;
+
+        var panel = chatbot.querySelector('.chatbot-panel');
+        var toggleButton = chatbot.querySelector('[data-chatbot-toggle]');
+        var closeButton = chatbot.querySelector('[data-chatbot-close]');
+        var form = chatbot.querySelector('[data-chatbot-form]');
+        var input = chatbot.querySelector('[data-chatbot-input]');
+        var sendButton = chatbot.querySelector('[data-chatbot-send]');
+        var messagesContainer = chatbot.querySelector('[data-chatbot-messages]');
+        var messagesEnd = chatbot.querySelector('[data-chatbot-end]');
+        var errorBox = chatbot.querySelector('[data-chatbot-error]');
+        var metaBox = chatbot.querySelector('[data-chatbot-meta]');
+        var isOpen = false;
+        var isSending = false;
+        var remaining = null;
+        var limit = null;
+        var messages = [
+          {
+            role: 'assistant',
+            text: ${JSON.stringify(CHAT_WELCOME_MESSAGE)},
+          },
+        ];
+
+        function setOpen(nextOpen) {
+          isOpen = nextOpen;
+          panel.classList.toggle('d-none', !isOpen);
+          toggleButton.setAttribute('aria-expanded', String(isOpen));
+          toggleButton.setAttribute('aria-label', isOpen ? 'Close chatbot' : 'Open chatbot');
+          toggleButton.setAttribute('title', isOpen ? 'Close chatbot' : 'Open chatbot');
+          toggleButton.innerHTML = '<i class="bi ' + (isOpen ? 'bi-x-lg' : 'bi-chat-dots-fill') + '" aria-hidden="true"></i>';
+
+          if (isOpen) {
+            scrollToEnd();
+            input.focus();
+          }
+        }
+
+        function scrollToEnd() {
+          messagesEnd.scrollIntoView({ block: 'end' });
+        }
+
+        function setError(message) {
+          errorBox.textContent = message || '';
+          errorBox.classList.toggle('d-none', !message);
+        }
+
+        function setMeta() {
+          var shouldShow = Number.isInteger(remaining) && Number.isInteger(limit);
+          metaBox.classList.toggle('d-none', !shouldShow);
+          metaBox.textContent = shouldShow ? remaining + ' of ' + limit + ' messages left today' : '';
+        }
+
+        function updateSendState() {
+          sendButton.disabled = !input.value.trim() || isSending || remaining === 0;
+          input.disabled = isSending || remaining === 0;
+          input.placeholder = remaining === 0 ? 'Daily limit reached' : 'Ask a question...';
+        }
+
+        function appendMessage(role, text) {
+          messages.push({ role: role, text: text });
+
+          var messageEl = document.createElement('div');
+          messageEl.className = 'chatbot-message chatbot-message-' + role;
+          var paragraph = document.createElement('p');
+          paragraph.textContent = text;
+          messageEl.appendChild(paragraph);
+          messagesContainer.insertBefore(messageEl, messagesEnd);
+          scrollToEnd();
+        }
+
+        function setThinking(showThinking) {
+          var existing = chatbot.querySelector('[data-chatbot-thinking]');
+
+          if (existing) {
+            existing.remove();
+          }
+
+          if (!showThinking) {
+            return;
+          }
+
+          var thinkingEl = document.createElement('div');
+          thinkingEl.className = 'chatbot-message chatbot-message-assistant d-inline-flex align-items-center gap-2';
+          thinkingEl.dataset.chatbotThinking = 'true';
+          thinkingEl.innerHTML = '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span><span>Thinking...</span>';
+          messagesContainer.insertBefore(thinkingEl, messagesEnd);
+          scrollToEnd();
+        }
+
+        async function parseChatResponse(response) {
+          var data = await response.json().catch(function () {
+            return {};
+          });
+
+          if (!response.ok) {
+            var error = new Error(data.message || 'The chatbot could not answer right now.');
+            error.remaining = data.remaining;
+            error.limit = data.limit;
+            throw error;
+          }
+
+          return data;
+        }
+
+        toggleButton.addEventListener('click', function () {
+          setOpen(!isOpen);
+        });
+
+        closeButton.addEventListener('click', function () {
+          setOpen(false);
+        });
+
+        input.addEventListener('input', updateSendState);
+        input.addEventListener('keydown', function (event) {
+          if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            form.requestSubmit();
+          }
+        });
+
+        form.addEventListener('submit', async function (event) {
+          event.preventDefault();
+
+          var messageText = input.value.trim();
+          if (!messageText || isSending || remaining === 0) return;
+
+          var history = messages
+            .slice(1)
+            .slice(-${CHAT_HISTORY_LIMIT})
+            .map(function (message) {
+              return {
+                role: message.role,
+                text: message.text,
+              };
+            });
+
+          appendMessage('user', messageText);
+          input.value = '';
+          setError('');
+          isSending = true;
+          setThinking(true);
+          updateSendState();
+
+          try {
+            var response = await fetch('/api/chat', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                message: messageText,
+                history: history,
+              }),
+            });
+            var data = await parseChatResponse(response);
+
+            appendMessage('assistant', data.reply);
+            remaining = data.remaining;
+            limit = data.limit;
+            setMeta();
+          } catch (error) {
+            setError(error.message);
+
+            if (Number.isInteger(error.remaining)) {
+              remaining = error.remaining;
+            }
+
+            if (Number.isInteger(error.limit)) {
+              limit = error.limit;
+            }
+
+            setMeta();
+          } finally {
+            isSending = false;
+            setThinking(false);
+            updateSendState();
+          }
+        });
+
+        updateSendState();
+      })();
+    </script>
+  </body>
+</html>`
 }
 
-function renderQuestionPage(question, questions, origin) {
+function renderQuestionPage(question, origin) {
   const canonicalPath = questionPath(question)
   const canonicalUrl = absoluteUrl(origin, canonicalPath)
   const title = questionPageTitle(question)
   const description = answerExcerpt(question)
-  const relatedQuestions = relatedQuestionsFor(question, questions)
-  const embedUrl = getYouTubeEmbedUrl(question.videoUrl)
-  const updatedDate = formatDisplayDate(question.updatedAt || question.createdAt)
-  const videoHtml = question.videoUrl
-    ? `<section class="video" aria-labelledby="video-title">
-        <h2 id="video-title">Video</h2>
-        ${
-          embedUrl
-            ? `<iframe src="${escapeHtml(embedUrl)}" title="${escapeHtml(
-                `Video answer for ${question.question}`,
-              )}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>`
-            : ''
-        }
-        <p><a href="${escapeHtml(question.videoUrl)}" rel="noopener noreferrer">Watch the related video</a></p>
-      </section>`
-    : ''
-  const updatedHtml = updatedDate
-    ? `<span>Updated <time datetime="${escapeHtml(
-        question.updatedAt || question.createdAt,
-      )}">${escapeHtml(updatedDate)}</time></span>`
-    : ''
-  const body = `<main class="wrap">
-    <nav aria-label="Breadcrumb">
-      <ol class="breadcrumb">
-        <li><a href="/">Home</a></li>
-        <li><a href="${QUESTION_ROUTE_PREFIX}">Questions</a></li>
-        <li>${escapeHtml(question.question)}</li>
-      </ol>
-    </nav>
+  const body = `<main>
+    <a class="all-questions-link" href="/">&larr; View All Questions</a>
     <article>
-      <p class="eyebrow">Question ${escapeHtml(question.id)}</p>
       <h1>${escapeHtml(question.question)}</h1>
-      <p class="lede">${escapeHtml(description)}</p>
-      <div class="meta">
-        <span>Official answer from ${escapeHtml(SITE_NAME)}</span>
-        ${updatedHtml}
-      </div>
-      <section class="answer" id="answer" aria-labelledby="answer-title">
-        <h2 id="answer-title">Answer</h2>
+      <div class="answer" id="answer">
         ${renderTextBlocks(question.answer)}
-      </section>
-      ${videoHtml}
-      ${renderRelatedQuestions(relatedQuestions, origin)}
+      </div>
     </article>
   </main>`
 
@@ -708,48 +653,7 @@ function renderQuestionPage(question, questions, origin) {
     title,
     description,
     canonicalUrl,
-    structuredData: questionStructuredData(question, relatedQuestions, origin, canonicalUrl),
-    body,
-  })
-}
-
-function renderQuestionsIndexPage(questions, origin) {
-  const canonicalUrl = absoluteUrl(origin, QUESTION_ROUTE_PREFIX)
-  const title = `Christian Questions and Answers | ${SITE_NAME}`
-  const description = `Browse every ${SITE_NAME} Christian answer as a crawlable index of questions about sin, faith, and Scripture.`
-  const links = questions
-    .map(
-      (item) => `<li>
-        <a href="${escapeHtml(questionPath(item))}">${escapeHtml(item.question)}</a>
-        <p>${escapeHtml(truncateText(item.answer, 132))}</p>
-      </li>`,
-    )
-    .join('\n')
-  const body = `<main class="wrap">
-    <nav aria-label="Breadcrumb">
-      <ol class="breadcrumb">
-        <li><a href="/">Home</a></li>
-        <li>Questions</li>
-      </ol>
-    </nav>
-    <section>
-      <p class="eyebrow">Christian Q&A Library</p>
-      <h1>Christian Questions and Answers</h1>
-      <p class="lede">${escapeHtml(description)}</p>
-      <div class="feed-links">
-        <a href="/sitemap.xml">XML sitemap</a>
-        <a href="/llms.txt">LLM reference</a>
-        <a href="/answers.json">Answer data</a>
-      </div>
-      <ul class="question-list">${links}</ul>
-    </section>
-  </main>`
-
-  return htmlDocument({
-    title,
-    description,
-    canonicalUrl,
-    structuredData: questionsIndexStructuredData(questions, origin, canonicalUrl),
+    structuredData: questionStructuredData(question, origin, canonicalUrl),
     body,
   })
 }
@@ -758,7 +662,6 @@ function renderSitemapXml(questions, origin) {
   const latestDate = latestQuestionDate(questions)
   const urlEntries = [
     { loc: `${origin}/`, lastmod: latestDate },
-    { loc: absoluteUrl(origin, QUESTION_ROUTE_PREFIX), lastmod: latestDate },
     ...questions.map((item) => ({
       loc: absoluteUrl(origin, questionPath(item)),
       lastmod: item.updatedAt || item.createdAt || '',
@@ -779,115 +682,13 @@ ${urlEntries}
 }
 
 function renderRobotsTxt(origin) {
-  const rules = [
-    'User-agent: *',
-    'Allow: /',
-    'Disallow: /admin',
-    'Disallow: /api/',
-    '',
-    'User-agent: OAI-SearchBot',
-    'Allow: /',
-    'Disallow: /admin',
-    'Disallow: /api/',
-    '',
-    'User-agent: GPTBot',
-    'Allow: /',
-    'Disallow: /admin',
-    'Disallow: /api/',
-    '',
-    'User-agent: ChatGPT-User',
-    'Allow: /',
-    'Disallow: /admin',
-    'Disallow: /api/',
-    '',
-    `Sitemap: ${absoluteUrl(origin, '/sitemap.xml')}`,
-  ]
+  return `User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api/
 
-  return `${rules.join('\n')}\n`
-}
-
-function renderLlmsTxt(questions, origin) {
-  const questionLinks = questions
-    .map(
-      (item) =>
-        `- [${normalizeWhitespace(item.question)}](${absoluteUrl(
-          origin,
-          questionPath(item),
-        )}): ${truncateText(item.answer, 150)}`,
-    )
-    .join('\n')
-
-  return `# ${SITE_NAME}
-
-> ${SITE_DESCRIPTION}
-
-This file points AI assistants and retrieval systems to the canonical public answers on ${SITE_NAME}.
-
-## Primary Resources
-
-- [Question index](${absoluteUrl(origin, QUESTION_ROUTE_PREFIX)})
-- [Full answer corpus](${absoluteUrl(origin, '/llms-full.txt')})
-- [Machine-readable answer data](${absoluteUrl(origin, '/answers.json')})
-- [XML sitemap](${absoluteUrl(origin, '/sitemap.xml')})
-
-## Questions
-
-${questionLinks}
+Sitemap: ${absoluteUrl(origin, '/sitemap.xml')}
 `
-}
-
-function renderLlmsFullTxt(questions, origin) {
-  const answers = questions
-    .map(
-      (item) => `## ${normalizeWhitespace(item.question)}
-
-Canonical URL: ${absoluteUrl(origin, questionPath(item))}
-Question ID: ${item.id}
-
-${String(item.answer || '').trim()}
-`,
-    )
-    .join('\n')
-
-  return `# ${SITE_NAME} Full Answer Corpus
-
-${SITE_DESCRIPTION}
-
-${answers}
-`
-}
-
-function answersJson(questions, origin) {
-  const latestDate = latestQuestionDate(questions)
-
-  return {
-    '@context': 'https://schema.org',
-    '@type': 'Dataset',
-    name: `${SITE_NAME} Christian Q&A Answers`,
-    description: SITE_DESCRIPTION,
-    url: absoluteUrl(origin, '/answers.json'),
-    license: absoluteUrl(origin, '/'),
-    creator: {
-      '@type': 'Organization',
-      name: SITE_NAME,
-      url: `${origin}/`,
-      sameAs: SOCIAL_PROFILES,
-    },
-    ...(latestDate ? { dateModified: latestDate } : {}),
-    hasPart: questions.map((item) => ({
-      '@type': 'Question',
-      identifier: String(item.id),
-      name: normalizeWhitespace(item.question),
-      url: absoluteUrl(origin, questionPath(item)),
-      acceptedAnswer: {
-        '@type': 'Answer',
-        text: String(item.answer || '').trim(),
-        url: `${absoluteUrl(origin, questionPath(item))}#answer`,
-      },
-      ...(item.createdAt ? { dateCreated: item.createdAt } : {}),
-      ...(item.updatedAt ? { dateModified: item.updatedAt } : {}),
-    })),
-  }
 }
 
 export function requestOrigin(request) {
@@ -918,19 +719,22 @@ export async function questionPageHandler(request, response) {
     return
   }
 
-  const rawId =
-    request.query?.idSlug ||
-    request.query?.id ||
-    request.params?.idSlug ||
-    request.params?.id ||
+  const rawSlug =
+    request.query?.slug ||
+    request.params?.slug ||
     requestPath(request).replace(`${QUESTION_ROUTE_PREFIX}/`, '')
-  const id = parseQuestionIdSlug(rawId)
 
-  if (!id) {
+  if (!rawSlug) {
     throw createHttpError(404, 'Question was not found.')
   }
 
-  const [question, questions] = await Promise.all([getPublicQuestion(id), getSeoQuestions()])
+  const questions = await getSeoQuestions()
+  const question = findQuestionBySlug(questions, rawSlug)
+
+  if (!question) {
+    throw createHttpError(404, 'Question was not found.')
+  }
+
   const origin = requestOrigin(request)
   const canonicalPath = questionPath(question)
   const path = requestPath(request)
@@ -944,24 +748,7 @@ export async function questionPageHandler(request, response) {
     request,
     response,
     200,
-    renderQuestionPage(question, questions, origin),
-    'text/html; charset=utf-8',
-  )
-}
-
-export async function questionsIndexPageHandler(request, response) {
-  if (!ensurePublicGet(request, response)) {
-    return
-  }
-
-  const questions = await getSeoQuestions()
-  const origin = requestOrigin(request)
-
-  sendBody(
-    request,
-    response,
-    200,
-    renderQuestionsIndexPage(questions, origin),
+    renderQuestionPage(question, origin),
     'text/html; charset=utf-8',
   )
 }
@@ -996,48 +783,6 @@ export async function robotsHandler(request, response) {
   )
 }
 
-export async function llmsHandler(request, response) {
-  if (!ensurePublicGet(request, response)) {
-    return
-  }
-
-  const questions = await getSeoQuestions()
-
-  sendBody(
-    request,
-    response,
-    200,
-    renderLlmsTxt(questions, requestOrigin(request)),
-    'text/plain; charset=utf-8',
-  )
-}
-
-export async function llmsFullHandler(request, response) {
-  if (!ensurePublicGet(request, response)) {
-    return
-  }
-
-  const questions = await getSeoQuestions()
-
-  sendBody(
-    request,
-    response,
-    200,
-    renderLlmsFullTxt(questions, requestOrigin(request)),
-    'text/plain; charset=utf-8',
-  )
-}
-
-export async function answersJsonHandler(request, response) {
-  if (!ensurePublicGet(request, response)) {
-    return
-  }
-
-  const questions = await getSeoQuestions()
-
-  sendJsonBody(request, response, 200, answersJson(questions, requestOrigin(request)))
-}
-
 export async function handleSeoError(request, response, error) {
   const status = error.status || 500
   const message = status === 500 ? 'Server error.' : error.message
@@ -1056,7 +801,6 @@ export async function handleSeoError(request, response, error) {
   <body>
     <main>
       <h1>${escapeHtml(message)}</h1>
-      <p><a href="/">Return to ${escapeHtml(SITE_NAME)}</a></p>
     </main>
   </body>
 </html>`

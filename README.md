@@ -1,4 +1,4 @@
-# The Sin Check
+# TheSinCheck
 
 React + Vite site with Vercel serverless API routes backed by a Neon Postgres database.
 
@@ -12,7 +12,8 @@ Set these locally and in Vercel:
 - `ADMIN_SESSION_SECRET`: long random string used to sign admin sessions
 - `QUESTION_IMPORT_TOKEN`: bearer token for `/api/questions/import` bulk automation
 - `GEMINI_API_KEY`: Google Gemini API key used by the server-side chatbot
-- `GEMINI_MODEL`: Gemini model name, defaults to `gemini-2.0-flash`
+- `GEMINI_MODEL`: Gemini model name, defaults to `gemini-flash-lite-latest`
+- `GEMINI_FALLBACK_MODELS`: optional comma-separated Gemini model fallbacks
 - `CHAT_DAILY_LIMIT`: daily chatbot messages per visitor, defaults to `10`
 - `CHAT_RATE_LIMIT_SECRET`: long random string used to hash visitor rate-limit keys
 
@@ -20,7 +21,7 @@ The API creates the required empty tables automatically on the first request. No
 
 ## SEO Routes
 
-Enabled questions are exposed as read-only crawlable pages at `/questions/{id}-{slug}`. The app also serves `/questions`, `/sitemap.xml`, `/robots.txt`, `/llms.txt`, `/llms-full.txt`, and `/answers.json` from the existing question data without changing the database.
+Enabled questions are exposed as read-only crawlable pages at `/questions/{question-title-with-dashes}`. The app also serves `/sitemap.xml` and `/robots.txt` from the existing question data without changing the database.
 
 ## Question Import API
 

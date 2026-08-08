@@ -7,9 +7,11 @@ const MAX_MESSAGE_LENGTH = 800
 const MAX_HISTORY_MESSAGES = 6
 const MAX_HISTORY_TEXT_LENGTH = 500
 const GEMINI_TIMEOUT_MS = 20000
+const DEFAULT_GEMINI_MODEL = 'gemini-flash-lite-latest'
+const DEFAULT_GEMINI_FALLBACK_MODELS = ['gemini-flash-lite-latest', 'gemini-3.1-flash-lite']
 
 const SYSTEM_INSTRUCTION = `
-You are the chatbot for The Sin Check.
+You are the chatbot for TheSinCheck.
 Answer from a Bible-centered Christian point of view with a calm, pastoral tone.
 The site owner's curated Q&A entries are the highest-priority facts for this website.
 When a curated Q&A entry clearly answers the user, base your reply on that entry first.
@@ -31,8 +33,21 @@ function getGeminiApiKey() {
   return process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY || ''
 }
 
-function getGeminiModel() {
-  return (process.env.GEMINI_MODEL || 'gemini-2.0-flash').replace(/^models\//, '')
+function normalizeGeminiModel(model) {
+  return String(model || '').trim().replace(/^models\//, '')
+}
+
+function uniqueValues(values) {
+  return [...new Set(values.filter(Boolean))]
+}
+
+function getGeminiModels() {
+  const configuredModel = normalizeGeminiModel(process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL)
+  const configuredFallbackModels = String(process.env.GEMINI_FALLBACK_MODELS || '')
+    .split(',')
+    .map(normalizeGeminiModel)
+
+  return uniqueValues([configuredModel, ...configuredFallbackModels, ...DEFAULT_GEMINI_FALLBACK_MODELS])
 }
 
 function getDailyLimit() {
@@ -143,15 +158,24 @@ function extractGeminiText(data) {
     .trim()
 }
 
-async function askGemini(payload) {
+function geminiErrorMessage(error) {
+  if (error?.status === 'RESOURCE_EXHAUSTED' || error?.code === 429) {
+    return 'The chatbot is busy right now. Please try again in a minute.'
+  }
+
+  return 'The chatbot is unavailable right now. Please try again soon.'
+}
+
+async function askGeminiModel(model, payload) {
   const apiKey = getGeminiApiKey()
-  const model = encodeURIComponent(getGeminiModel())
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS)
 
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+        model,
+      )}:generateContent`,
       {
         method: 'POST',
         headers: {
@@ -180,14 +204,21 @@ async function askGemini(payload) {
     const data = await response.json().catch(() => ({}))
 
     if (!response.ok) {
-      console.error('Gemini API error:', data.error || data)
-      throw createHttpError(502, 'The chatbot is unavailable right now. Please try again soon.')
+      const error = new Error(geminiErrorMessage(data.error))
+
+      error.providerStatus = response.status
+      error.providerError = data.error || data
+      throw error
     }
 
     const reply = extractGeminiText(data)
 
     if (!reply) {
-      throw createHttpError(502, 'The chatbot did not return a reply. Please try again.')
+      const error = new Error('The chatbot did not return a reply. Please try again.')
+
+      error.providerStatus = 502
+      error.providerError = { message: 'Gemini returned an empty reply.' }
+      throw error
     }
 
     return reply
@@ -200,6 +231,28 @@ async function askGemini(payload) {
   } finally {
     clearTimeout(timeout)
   }
+}
+
+async function askGemini(payload) {
+  const models = getGeminiModels()
+  let lastError
+
+  for (const model of models) {
+    try {
+      return await askGeminiModel(model, payload)
+    } catch (error) {
+      lastError = error
+
+      if (error.providerError) {
+        console.error(`Gemini API error for ${model}:`, error.providerError)
+        continue
+      }
+
+      throw error
+    }
+  }
+
+  throw createHttpError(502, lastError?.message || 'The chatbot is unavailable right now. Please try again soon.')
 }
 
 export default async function handler(request, response) {

@@ -1,12 +1,8 @@
 {
   "rewrites": [
     {
-      "source": "/questions",
-      "destination": "/api/seo?route=questions"
-    },
-    {
-      "source": "/questions/:idSlug",
-      "destination": "/api/seo?route=question&idSlug=:idSlug"
+      "source": "/questions/:slug",
+      "destination": "/api/seo?route=question&slug=:slug"
     },
     {
       "source": "/sitemap.xml",
@@ -15,18 +11,6 @@
     {
       "source": "/robots.txt",
       "destination": "/api/seo?route=robots"
-    },
-    {
-      "source": "/llms.txt",
-      "destination": "/api/seo?route=llms"
-    },
-    {
-      "source": "/llms-full.txt",
-      "destination": "/api/seo?route=llms-full"
-    },
-    {
-      "source": "/answers.json",
-      "destination": "/api/seo?route=answers-json"
     },
     {
       "source": "/admin",
