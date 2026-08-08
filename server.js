@@ -8,6 +8,7 @@ import chatHandler from './api/chat.js'
 import questionHandler from './api/questions/[id].js'
 import questionImportHandler from './api/questions/import.js'
 import questionsHandler from './api/questions/index.js'
+import seoHandler from './api/seo.js'
 import {
   answersJsonHandler,
   llmsFullHandler,
@@ -40,6 +41,7 @@ app.all('/api/questions/:id', apiHandlerMiddleware(questionHandler))
 app.all('/api/chat', apiHandlerMiddleware(chatHandler))
 app.all('/api/admin/login', apiHandlerMiddleware(adminLoginHandler))
 app.all('/api/admin/logout', apiHandlerMiddleware(adminLogoutHandler))
+app.all('/api/seo', apiHandlerMiddleware(seoHandler))
 
 app.all('/questions', apiHandlerMiddleware(questionsIndexPageHandler))
 app.all('/questions/:idSlug', apiHandlerMiddleware(questionPageHandler))

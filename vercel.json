@@ -2,31 +2,31 @@
   "rewrites": [
     {
       "source": "/questions",
-      "destination": "/api/seo/questions"
+      "destination": "/api/seo?route=questions"
     },
     {
       "source": "/questions/:idSlug",
-      "destination": "/api/seo/question?idSlug=:idSlug"
+      "destination": "/api/seo?route=question&idSlug=:idSlug"
     },
     {
       "source": "/sitemap.xml",
-      "destination": "/api/seo/sitemap"
+      "destination": "/api/seo?route=sitemap"
     },
     {
       "source": "/robots.txt",
-      "destination": "/api/seo/robots"
+      "destination": "/api/seo?route=robots"
     },
     {
       "source": "/llms.txt",
-      "destination": "/api/seo/llms"
+      "destination": "/api/seo?route=llms"
     },
     {
       "source": "/llms-full.txt",
-      "destination": "/api/seo/llms-full"
+      "destination": "/api/seo?route=llms-full"
     },
     {
       "source": "/answers.json",
-      "destination": "/api/seo/answers-json"
+      "destination": "/api/seo?route=answers-json"
     },
     {
       "source": "/admin",
