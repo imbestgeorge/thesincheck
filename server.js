@@ -8,6 +8,15 @@ import chatHandler from './api/chat.js'
 import questionHandler from './api/questions/[id].js'
 import questionImportHandler from './api/questions/import.js'
 import questionsHandler from './api/questions/index.js'
+import {
+  answersJsonHandler,
+  llmsFullHandler,
+  llmsHandler,
+  questionPageHandler,
+  questionsIndexPageHandler,
+  robotsHandler,
+  sitemapHandler,
+} from './api/_lib/seo.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -31,6 +40,14 @@ app.all('/api/questions/:id', apiHandlerMiddleware(questionHandler))
 app.all('/api/chat', apiHandlerMiddleware(chatHandler))
 app.all('/api/admin/login', apiHandlerMiddleware(adminLoginHandler))
 app.all('/api/admin/logout', apiHandlerMiddleware(adminLogoutHandler))
+
+app.all('/questions', apiHandlerMiddleware(questionsIndexPageHandler))
+app.all('/questions/:idSlug', apiHandlerMiddleware(questionPageHandler))
+app.all('/sitemap.xml', apiHandlerMiddleware(sitemapHandler))
+app.all('/robots.txt', apiHandlerMiddleware(robotsHandler))
+app.all('/llms.txt', apiHandlerMiddleware(llmsHandler))
+app.all('/llms-full.txt', apiHandlerMiddleware(llmsFullHandler))
+app.all('/answers.json', apiHandlerMiddleware(answersJsonHandler))
 
 if (isProduction) {
   const distPath = path.join(__dirname, 'dist')

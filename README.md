@@ -7,6 +7,7 @@ React + Vite site with Vercel serverless API routes backed by a Neon Postgres da
 Set these locally and in Vercel:
 
 - `DATABASE_URL`: Neon Postgres connection string
+- `PUBLIC_SITE_URL`: canonical production origin used in SEO URLs, for example `https://thesincheck.com`
 - `ADMIN_PASSWORD`: password for `/admin`
 - `ADMIN_SESSION_SECRET`: long random string used to sign admin sessions
 - `QUESTION_IMPORT_TOKEN`: bearer token for `/api/questions/import` bulk automation
@@ -16,6 +17,10 @@ Set these locally and in Vercel:
 - `CHAT_RATE_LIMIT_SECRET`: long random string used to hash visitor rate-limit keys
 
 The API creates the required empty tables automatically on the first request. No starter questions are seeded.
+
+## SEO Routes
+
+Enabled questions are exposed as read-only crawlable pages at `/questions/{id}-{slug}`. The app also serves `/questions`, `/sitemap.xml`, `/robots.txt`, `/llms.txt`, `/llms-full.txt`, and `/answers.json` from the existing question data without changing the database.
 
 ## Question Import API
 

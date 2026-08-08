@@ -7,6 +7,7 @@ import {
   siX,
   siYoutube,
 } from 'simple-icons'
+import { questionPath } from '../shared/seo.js'
 import logo from './assets/logo.png'
 
 const PAGE_SIZE = 12
@@ -378,7 +379,11 @@ function SiteNavbar() {
     <nav className="navbar bg-success">
       <div className="container-fluid">
         <div className="row align-items-center g-1 g-md-3 w-100">
-          <div className="col-4 col-md-3"></div>
+          <div className="col-4 col-md-3 d-flex justify-content-start">
+            <a className="nav-link text-white fw-semibold" href="/questions">
+              Questions
+            </a>
+          </div>
           <div className="col-4 col-md-6 text-center">
             <a href="/" className="navbar-brand m-0">
               <img
@@ -429,6 +434,11 @@ function QuestionPanel({ item, accordionId }) {
       >
         <div className="pb-4">
           <p className="question-answer mb-3 text-black fs-5">{item.answer}</p>
+          <p className="mb-3">
+            <a className="link-success fw-semibold" href={questionPath(item)}>
+              Permanent answer page
+            </a>
+          </p>
           {embedUrl && (
             <div className="ratio ratio-16x9 border border-success">
               <iframe

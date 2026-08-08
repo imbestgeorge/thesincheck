@@ -110,13 +110,28 @@ async function setupSchema() {
   `
 }
 
+function normalizeTimestamp(value) {
+  if (!value) {
+    return ''
+  }
+
+  const date = new Date(value)
+
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString()
+}
+
 function normalizeQuestion(row) {
+  const createdAt = normalizeTimestamp(row.createdAt)
+  const updatedAt = normalizeTimestamp(row.updatedAt)
+
   return {
     id: Number(row.id),
     question: row.question,
     answer: row.answer,
     videoUrl: row.videoUrl || '',
     isEnabled: row.isEnabled !== false,
+    ...(createdAt ? { createdAt } : {}),
+    ...(updatedAt ? { updatedAt } : {}),
   }
 }
 
@@ -183,6 +198,48 @@ export async function getCatalog({ includeDisabled = false } = {}) {
     nextId,
     questions: questions.map(normalizeQuestion),
   }
+}
+
+export async function getSeoQuestions() {
+  const database = getSql()
+  const questions = await database`
+    SELECT
+      id,
+      question,
+      answer,
+      video_url AS "videoUrl",
+      is_enabled AS "isEnabled",
+      created_at AS "createdAt",
+      updated_at AS "updatedAt"
+    FROM sincheck_questions
+    WHERE is_enabled = TRUE
+    ORDER BY id ASC
+  `
+
+  return questions.map(normalizeQuestion)
+}
+
+export async function getPublicQuestion(id) {
+  const database = getSql()
+  const questions = await database`
+    SELECT
+      id,
+      question,
+      answer,
+      video_url AS "videoUrl",
+      is_enabled AS "isEnabled",
+      created_at AS "createdAt",
+      updated_at AS "updatedAt"
+    FROM sincheck_questions
+    WHERE id = ${id} AND is_enabled = TRUE
+    LIMIT 1
+  `
+
+  if (questions.length === 0) {
+    throw createHttpError(404, `Question ${id} was not found.`)
+  }
+
+  return normalizeQuestion(questions[0])
 }
 
 export async function getRelevantQuestions(message, limit = 8) {

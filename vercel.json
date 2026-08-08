@@ -1,6 +1,34 @@
 {
   "rewrites": [
     {
+      "source": "/questions",
+      "destination": "/api/seo/questions"
+    },
+    {
+      "source": "/questions/:idSlug",
+      "destination": "/api/seo/question?idSlug=:idSlug"
+    },
+    {
+      "source": "/sitemap.xml",
+      "destination": "/api/seo/sitemap"
+    },
+    {
+      "source": "/robots.txt",
+      "destination": "/api/seo/robots"
+    },
+    {
+      "source": "/llms.txt",
+      "destination": "/api/seo/llms"
+    },
+    {
+      "source": "/llms-full.txt",
+      "destination": "/api/seo/llms-full"
+    },
+    {
+      "source": "/answers.json",
+      "destination": "/api/seo/answers-json"
+    },
+    {
       "source": "/admin",
       "destination": "/index.html"
     }
