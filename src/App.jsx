@@ -1241,6 +1241,14 @@ function App() {
     loadQuestions()
   }, [loadQuestions])
 
+  useEffect(() => {
+    const allowedPaths = new Set(['/', '/admin'])
+
+    if (!allowedPaths.has(window.location.pathname)) {
+      window.history.replaceState(null, '', '/')
+    }
+  }, [])
+
   if (isLoading) {
     return (
       <div className="min-vh-100 d-flex flex-column bg-white text-black">

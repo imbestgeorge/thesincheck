@@ -1,5 +1,4 @@
 import { getSeoQuestions } from './db.js'
-import { createHttpError } from './http.js'
 import {
   siDiscord,
   siInstagram,
@@ -725,14 +724,16 @@ export async function questionPageHandler(request, response) {
     requestPath(request).replace(`${QUESTION_ROUTE_PREFIX}/`, '')
 
   if (!rawSlug) {
-    throw createHttpError(404, 'Question was not found.')
+    redirectResponse(response, 302, '/')
+    return
   }
 
   const questions = await getSeoQuestions()
   const question = findQuestionBySlug(questions, rawSlug)
 
   if (!question) {
-    throw createHttpError(404, 'Question was not found.')
+    redirectResponse(response, 302, '/')
+    return
   }
 
   const origin = requestOrigin(request)
@@ -785,55 +786,10 @@ export async function robotsHandler(request, response) {
 
 export async function handleSeoError(request, response, error) {
   const status = error.status || 500
-  const message = status === 500 ? 'Server error.' : error.message
 
   if (status === 500) {
     console.error(error)
   }
 
-  const body = `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="robots" content="noindex, follow" />
-    <link rel="icon" type="image/png" href="/favicon.png" />
-    <title>${escapeHtml(message)} | ${escapeHtml(SITE_NAME)}</title>
-    <style>
-      body {
-        margin: 0;
-        background: #ffffff;
-        color: #111111;
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        line-height: 1.5;
-      }
-
-      main {
-        width: min(820px, calc(100% - 32px));
-        margin: 0 auto;
-        padding: 48px 0;
-      }
-
-      h1 {
-        margin: 0 0 1.5rem;
-        font-size: 1.5rem;
-        font-weight: 600;
-      }
-
-      a {
-        color: #000000;
-        text-decoration: underline;
-        text-underline-offset: 0.18em;
-      }
-    </style>
-  </head>
-  <body>
-    <main>
-      <h1>${escapeHtml(message)}</h1>
-      <a href="/">&larr; Back to main page</a>
-    </main>
-  </body>
-</html>`
-
-  sendBody(request, response, status, body, 'text/html; charset=utf-8')
+  redirectResponse(response, 302, '/')
 }
