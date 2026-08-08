@@ -10,6 +10,7 @@ import questionImportHandler from './api/questions/import.js'
 import questionsHandler from './api/questions/index.js'
 import seoHandler from './api/seo.js'
 import {
+  handleSeoError,
   questionPageHandler,
   robotsHandler,
   sitemapHandler,
@@ -31,6 +32,14 @@ function apiHandlerMiddleware(handler) {
   }
 }
 
+function seoHandlerMiddleware(handler) {
+  return (request, response) => {
+    Promise.resolve(handler(request, response)).catch((error) =>
+      handleSeoError(request, response, error),
+    )
+  }
+}
+
 app.all('/api/questions', apiHandlerMiddleware(questionsHandler))
 app.all('/api/questions/import', apiHandlerMiddleware(questionImportHandler))
 app.all('/api/questions/:id', apiHandlerMiddleware(questionHandler))
@@ -39,9 +48,9 @@ app.all('/api/admin/login', apiHandlerMiddleware(adminLoginHandler))
 app.all('/api/admin/logout', apiHandlerMiddleware(adminLogoutHandler))
 app.all('/api/seo', apiHandlerMiddleware(seoHandler))
 
-app.all('/questions/:slug', apiHandlerMiddleware(questionPageHandler))
-app.all('/sitemap.xml', apiHandlerMiddleware(sitemapHandler))
-app.all('/robots.txt', apiHandlerMiddleware(robotsHandler))
+app.all('/questions/:slug', seoHandlerMiddleware(questionPageHandler))
+app.all('/sitemap.xml', seoHandlerMiddleware(sitemapHandler))
+app.all('/robots.txt', seoHandlerMiddleware(robotsHandler))
 
 if (isProduction) {
   const distPath = path.join(__dirname, 'dist')
