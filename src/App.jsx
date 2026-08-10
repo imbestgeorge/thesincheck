@@ -464,6 +464,15 @@ function Pagination({ currentPage, pageCount, onPageChange }) {
     return null
   }
 
+  function handlePageChange(page) {
+    if (page === currentPage) {
+      return
+    }
+
+    onPageChange(page)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   const visibleCount = Math.min(pageButtonLimit, pageCount)
   const pagesBeforeCurrent = Math.floor((visibleCount - 1) / 2)
   const firstVisiblePage = Math.min(
@@ -483,7 +492,7 @@ function Pagination({ currentPage, pageCount, onPageChange }) {
             type="button"
             className="page-link"
             tabIndex={currentPage === 1 ? -1 : undefined}
-            onClick={() => onPageChange(currentPage - 1)}
+            onClick={() => handlePageChange(currentPage - 1)}
             disabled={currentPage === 1}
           >
             Previous
@@ -498,7 +507,7 @@ function Pagination({ currentPage, pageCount, onPageChange }) {
                 type="button"
                 className="page-link"
                 aria-current={isCurrentPage ? 'page' : undefined}
-                onClick={() => onPageChange(page)}
+                onClick={() => handlePageChange(page)}
               >
                 {page}
                 {isCurrentPage && <span className="visually-hidden"> (current)</span>}
@@ -511,7 +520,7 @@ function Pagination({ currentPage, pageCount, onPageChange }) {
             type="button"
             className="page-link"
             tabIndex={currentPage === pageCount ? -1 : undefined}
-            onClick={() => onPageChange(currentPage + 1)}
+            onClick={() => handlePageChange(currentPage + 1)}
             disabled={currentPage === pageCount}
           >
             Next
