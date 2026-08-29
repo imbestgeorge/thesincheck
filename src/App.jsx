@@ -172,7 +172,7 @@ function KofiButton() {
         return
       }
 
-      window.kofiwidget2.init('Support me on Ko-fi', '#72a4f2', 'W2X523UHOA')
+      window.kofiwidget2.init('Support me on Ko-fi', '#72a4f2', 'J3J41DE2OT')
       widgetRef.current.innerHTML = window.kofiwidget2.getHTML()
     }
 

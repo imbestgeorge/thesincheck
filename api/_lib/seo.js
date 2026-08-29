@@ -19,7 +19,7 @@ import {
 
 const CACHE_CONTROL = 'public, max-age=0, s-maxage=300, stale-while-revalidate=86400'
 const FALLBACK_SITE_ORIGIN = 'https://thesincheck.com'
-const KOFI_WIDGET_ID = 'W2X523UHOA'
+const KOFI_WIDGET_ID = 'J3J41DE2OT'
 const CHAT_HISTORY_LIMIT = 8
 const CHAT_WELCOME_MESSAGE =
   "Hey, I'm the virtual assistant for TheSinCheck. You can ask me questions about whether something is sinful. I'll use TheSinCheck Q&A first, then answer from a biblical Christian point of view."
