@@ -3,9 +3,7 @@ import {
   siDiscord,
   siInstagram,
   siThreads,
-  siTiktok,
   siX,
-  siYoutube,
 } from 'simple-icons'
 import logo from './assets/logo.png'
 
@@ -17,28 +15,18 @@ const NOTICE_FADE_MS = 350
 
 const socialLinks = [
   {
-    name: 'YouTube',
-    href: 'https://www.youtube.com/@TheSinCheck',
-    icon: siYoutube,
-  },
-  {
-    name: 'TikTok',
-    href: 'https://www.tiktok.com/@thesincheck',
-    icon: siTiktok,
-  },
-  {
     name: 'Instagram',
-    href: 'https://www.instagram.com/thesincheck',
+    href: 'https://www.instagram.com/imbestgeorge',
     icon: siInstagram,
   },
   {
     name: 'X',
-    href: 'https://x.com/TheSinCheck',
+    href: 'https://x.com/imbestgeorge',
     icon: siX,
   },
   {
     name: 'Threads',
-    href: 'https://www.threads.com/@thesincheck',
+    href: 'https://www.threads.com/@imbestgeorge',
     icon: siThreads,
   },
   {
