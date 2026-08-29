@@ -16,6 +16,12 @@
   left: clamp(1rem, 3vw, 1.5rem);
   bottom: clamp(1rem, 3vw, 1.5rem);
   z-index: 1050;
+  pointer-events: none;
+}
+
+.chatbot-toggle,
+.chatbot-panel {
+  pointer-events: auto;
 }
 
 .chatbot-toggle {
